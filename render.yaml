@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: eventify-ai-planner
+    runtime: python
+    plan: starter
+    region: oregon
+    buildCommand: npm --prefix frontend install && npm --prefix frontend run build && pip install -r backend/requirements.txt
+    startCommand: alembic upgrade head && uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: APP_ENV
+        value: production
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eventify-db
+          property: connectionString
+
+databases:
+  - name: eventify-db
+    databaseName: eventify
+    user: eventify_user
+    plan: starter
+    region: oregon

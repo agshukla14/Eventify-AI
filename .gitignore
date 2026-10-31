@@ -1,0 +1,54 @@
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+
+# SQLite Database Files
+*.db
+*.sqlite
+*.sqlite3
+celebration_planner.db
+test_*.db
+
+# Virtual Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Node Dependencies
+frontend/node_modules/
+node_modules/
+
+# Python Cache & Testing
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Playwright Test Artifacts
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# Logs
+*.log
+logs/
+
+# Temporary Files, Uploads and Exports
+tmp/
+temp/
+exports/
+*.tmp
+uploads/
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
