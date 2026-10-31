@@ -2,7 +2,7 @@ services:
   - type: web
     name: eventify-ai-planner
     runtime: python
-    plan: starter
+    plan: free
     region: oregon
     buildCommand: npm --prefix frontend install && npm --prefix frontend run build && pip install -r backend/requirements.txt
     startCommand: alembic upgrade head && uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
@@ -25,5 +25,5 @@ databases:
   - name: eventify-db
     databaseName: eventify
     user: eventify_user
-    plan: starter
+    plan: free
     region: oregon
