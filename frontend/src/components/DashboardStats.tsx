@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Wallet, CheckSquare, Users, AlertTriangle } from 'lucide-react';
+import { Clock, Wallet, CheckSquare, Users, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { FullEventPlan } from '../types';
 
 interface DashboardStatsProps {
@@ -29,57 +29,57 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ plan }) => {
     <div className="space-y-4">
       {/* Over-budget or High-risk Alerts */}
       {plan.budget.is_over_budget && (
-        <div className="bg-rose-50 border-l-4 border-rose-500 p-3.5 rounded-r-xl flex items-center gap-3 text-rose-800 text-sm animate-pulse">
+        <div className="bg-rose-50 border-l-4 border-rose-500 p-3.5 rounded-r-2xl flex items-center gap-3 text-rose-800 text-xs sm:text-sm animate-pulse shadow-2xs">
           <AlertTriangle className="w-5 h-5 text-rose-600 flex-shrink-0" />
           <div>
-            <span className="font-semibold">Budget Warning:</span> Total spend exceeds budget by{' '}
-            {plan.budget.over_budget_amount.toLocaleString()} {plan.budget.currency}! Check the Budget tab to adjust allocations.
+            <span className="font-bold">Budget Warning:</span> Total spend exceeds budget by{' '}
+            {plan.budget.over_budget_amount.toLocaleString('en-IN')} {plan.budget.currency}! Check the Budget tab to adjust allocations.
           </div>
         </div>
       )}
 
       {highRiskCount > 0 && (
-        <div className="bg-amber-50 border-l-4 border-amber-500 p-3.5 rounded-r-xl flex items-center gap-3 text-amber-900 text-sm">
+        <div className="bg-amber-50 border-l-4 border-amber-500 p-3.5 rounded-r-2xl flex items-center gap-3 text-amber-900 text-xs sm:text-sm shadow-2xs">
           <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
           <div>
-            <span className="font-semibold">{highRiskCount} High-Risk Milestone(s) Flagged:</span> Short lead-time requires expedited vendor contracts and booking.
+            <span className="font-bold">{highRiskCount} High-Risk Milestone(s) Flagged:</span> Short lead-time requires expedited vendor contracts and booking.
           </div>
         </div>
       )}
 
       {/* 4 Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Days Left */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 flex-shrink-0">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
             <Clock className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Days Remaining</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Days Remaining</p>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-2xl font-bold text-slate-900">{daysLeft > 0 ? daysLeft : 0}</span>
-              <span className="text-xs text-slate-400 font-medium">days</span>
+              <span className="text-2xl font-extrabold text-slate-900">{daysLeft > 0 ? daysLeft : 0}</span>
+              <span className="text-xs text-slate-400 font-medium">days left</span>
             </div>
-            <p className="text-xs text-teal-600 font-medium mt-0.5 truncate">{plan.intake.date}</p>
+            <p className="text-xs text-indigo-600 font-medium mt-0.5 truncate">{plan.intake.date}</p>
           </div>
         </div>
 
         {/* Budget Spent */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
           <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
             <Wallet className="w-6 h-6" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-slate-500">Budget Utilized</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Budget Utilized</p>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-2xl font-bold text-slate-900">{budgetUsedPct}%</span>
+              <span className="text-2xl font-extrabold text-slate-900">{budgetUsedPct}%</span>
               <span className="text-xs text-slate-400 truncate">
-                of {totalBudget.toLocaleString()} {plan.budget.currency}
+                of {totalBudget.toLocaleString('en-IN')} {plan.budget.currency}
               </span>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden">
               <div
-                className={`h-full rounded-full ${plan.budget.is_over_budget ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                className={`h-full rounded-full transition-all duration-300 ${plan.budget.is_over_budget ? 'bg-rose-500' : 'bg-emerald-500'}`}
                 style={{ width: `${Math.min(100, budgetUsedPct)}%` }}
               />
             </div>
@@ -87,14 +87,14 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ plan }) => {
         </div>
 
         {/* Tasks Progress */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
           <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
             <CheckSquare className="w-6 h-6" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-slate-500">Tasks Completed</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tasks Completed</p>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-2xl font-bold text-slate-900">{tasksDone}</span>
+              <span className="text-2xl font-extrabold text-slate-900">{tasksDone}</span>
               <span className="text-xs text-slate-400 font-medium">/ {tasks.length} ({tasksPct}%)</span>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden">
@@ -107,15 +107,15 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ plan }) => {
         </div>
 
         {/* Vendors Booked */}
-        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
           <div className="w-12 h-12 rounded-xl bg-violet-50 border border-violet-100 flex items-center justify-center text-violet-600 flex-shrink-0">
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Vendors Booked</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Vendors Booked</p>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-2xl font-bold text-slate-900">{vendorsBooked}</span>
-              <span className="text-xs text-slate-400 font-medium">/ {vendors.length}</span>
+              <span className="text-2xl font-extrabold text-slate-900">{vendorsBooked}</span>
+              <span className="text-xs text-slate-400 font-medium">/ {vendors.length} booked</span>
             </div>
             <p className="text-xs text-violet-600 font-medium mt-0.5">
               {vendors.length - vendorsBooked} pending quotes

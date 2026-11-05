@@ -1,6 +1,7 @@
 import {
   EventIntake,
   FullEventPlan,
+  BudgetItem,
   DashboardSummary,
   ChatResponse,
   ChatMessage,
@@ -35,20 +36,123 @@ import {
   TokenResponse,
   LoginRequest,
   RegisterRequest,
+  RegisterResponse,
   ExecutiveDashboardResponse,
 } from './types';
 
 const API_BASE = '/api';
 
+// =========================================================
+// AUTHENTICATION UTILITIES & HTTP CLIENT INTERCEPTOR
+// =========================================================
+
+export function getStoredToken(): string | null {
+  return localStorage.getItem('eventify_token');
+}
+
+export function setStoredToken(token: string): void {
+  localStorage.setItem('eventify_token', token);
+}
+
+export function removeStoredToken(): void {
+  localStorage.removeItem('eventify_token');
+}
+
+export function getAuthHeaders(): Record<string, string> {
+  const token = getStoredToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export interface ApiFetchOptions extends RequestInit {
+  skipAuth?: boolean;
+}
+
+/**
+ * Centralized authenticated fetch wrapper.
+ * Automatically attaches Authorization Bearer token to protected API requests,
+ * defaults to Content-Type: application/json for JSON payload requests,
+ * and preserves custom headers and request options.
+ */
+export async function apiFetch(
+  endpoint: string,
+  options: ApiFetchOptions = {}
+): Promise<Response> {
+  const { skipAuth, headers: optHeaders, ...restOptions } = options;
+  const headers: Record<string, string> = {};
+
+  if (restOptions.body && typeof restOptions.body === 'string') {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  if (!skipAuth) {
+    const token = getStoredToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  if (optHeaders) {
+    if (optHeaders instanceof Headers) {
+      optHeaders.forEach((value, key) => {
+        headers[key] = value;
+      });
+    } else if (Array.isArray(optHeaders)) {
+      optHeaders.forEach(([key, value]) => {
+        headers[key] = value;
+      });
+    } else {
+      Object.assign(headers, optHeaders);
+    }
+  }
+
+  const url =
+    endpoint.startsWith('http://') || endpoint.startsWith('https://')
+      ? endpoint
+      : `${API_BASE}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+
+  return fetch(url, {
+    ...restOptions,
+    headers,
+  });
+}
+
+/**
+ * Triggers an authenticated browser file download (e.g. For PDFs / CSVs)
+ * via fetch and Blob URL, ensuring Authorization headers are transmitted.
+ */
+export async function downloadFileWithAuth(url: string, filename: string): Promise<void> {
+  const res = await apiFetch(url);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to download file' }));
+    throw new Error(err.detail || 'Failed to download file');
+  }
+  const blob = await res.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(blobUrl);
+}
+
+// =========================================================
+// PHASE 1: CORE CELEBRATION PLANNER API CLIENT
+// =========================================================
+
 export async function fetchHealth() {
-  const res = await fetch(`${API_BASE}/health`);
+  const res = await apiFetch('/health', { skipAuth: true });
   return res.json();
 }
 
 export async function createEvent(intake: EventIntake): Promise<FullEventPlan> {
-  const res = await fetch(`${API_BASE}/events`, {
+  const res = await apiFetch('/events', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(intake),
   });
   if (!res.ok) {
@@ -59,76 +163,162 @@ export async function createEvent(intake: EventIntake): Promise<FullEventPlan> {
 }
 
 export async function listEvents(): Promise<DashboardSummary[]> {
-  const res = await fetch(`${API_BASE}/events`);
-  if (!res.ok) throw new Error('Failed to fetch events');
+  const res = await apiFetch('/events');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch events' }));
+    throw new Error(err.detail || 'Failed to fetch events');
+  }
   return res.json();
 }
 
 export async function getEvent(eventId: string): Promise<FullEventPlan> {
-  const res = await fetch(`${API_BASE}/events/${eventId}`);
-  if (!res.ok) throw new Error('Failed to fetch event plan');
+  const res = await apiFetch(`/events/${eventId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch event plan' }));
+    throw new Error(err.detail || 'Failed to fetch event plan');
+  }
   return res.json();
 }
 
 export async function updateEvent(eventId: string, plan: FullEventPlan): Promise<FullEventPlan> {
-  const res = await fetch(`${API_BASE}/events/${eventId}`, {
+  const res = await apiFetch(`/events/${eventId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(plan),
   });
-  if (!res.ok) throw new Error('Failed to update event plan');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to update event plan' }));
+    throw new Error(err.detail || 'Failed to update event plan');
+  }
   return res.json();
 }
 
 export async function deleteEvent(eventId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/events/${eventId}`, {
+  const res = await apiFetch(`/events/${eventId}`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error('Failed to delete event');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to delete event' }));
+    throw new Error(err.detail || 'Failed to delete event');
+  }
 }
 
 export async function sendChatMessage(eventId: string, message: string): Promise<ChatResponse> {
-  const res = await fetch(`${API_BASE}/chat`, {
+  const res = await apiFetch('/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ event_id: eventId, message }),
   });
-  if (!res.ok) throw new Error('Failed to send chat message');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to send chat message' }));
+    throw new Error(err.detail || 'Failed to send chat message');
+  }
   return res.json();
 }
 
 export async function getChatHistory(eventId: string): Promise<ChatMessage[]> {
-  const res = await fetch(`${API_BASE}/chat/${eventId}/history`);
-  if (!res.ok) throw new Error('Failed to fetch chat history');
+  const res = await apiFetch(`/chat/${eventId}/history`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch chat history' }));
+    throw new Error(err.detail || 'Failed to fetch chat history');
+  }
   return res.json();
 }
 
 export function getExportCsvUrl(eventId: string): string {
-  return `${API_BASE}/events/${eventId}/export/csv`;
+  const token = getStoredToken();
+  return token
+    ? `${API_BASE}/events/${eventId}/export/csv?token=${encodeURIComponent(token)}`
+    : `${API_BASE}/events/${eventId}/export/csv`;
 }
 
 export function getExportPdfUrl(eventId: string): string {
-  return `${API_BASE}/events/${eventId}/export/pdf`;
+  const token = getStoredToken();
+  return token
+    ? `${API_BASE}/events/${eventId}/export/pdf?token=${encodeURIComponent(token)}`
+    : `${API_BASE}/events/${eventId}/export/pdf`;
 }
 
 export async function getBudgetAnalysis(eventId: string): Promise<BudgetAnalysis> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/budget-analysis`);
-  if (!res.ok) throw new Error('Failed to fetch budget analysis');
+  const res = await apiFetch(`/events/${eventId}/budget-analysis`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch budget analysis' }));
+    throw new Error(err.detail || 'Failed to fetch budget analysis');
+  }
   return res.json();
 }
 
 export async function optimizeBudget(
   eventId: string,
-  userPrompt: string
+  userPrompt: string,
+  protectedCategories?: string[]
 ): Promise<BudgetOptimizationResponse> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/optimize-budget`, {
+  const res = await apiFetch(`/events/${eventId}/optimize-budget`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_prompt: userPrompt }),
+    body: JSON.stringify({ user_prompt: userPrompt, protected_categories: protectedCategories || [] }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Failed to optimize budget' }));
     throw new Error(err.detail || 'Failed to optimize budget');
+  }
+  return res.json();
+}
+
+export async function getCategoryAnalysis(eventId: string): Promise<any> {
+  const res = await apiFetch(`/events/${eventId}/category-analysis`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch category analysis' }));
+    throw new Error(err.detail || 'Failed to fetch category analysis');
+  }
+  return res.json();
+}
+
+export async function normalizeCategories(
+  eventId: string,
+  approvedCanonicalMerges?: string[]
+): Promise<FullEventPlan> {
+  const res = await apiFetch(`/events/${eventId}/normalize-categories`, {
+    method: 'POST',
+    body: JSON.stringify({ approved_canonical_merges: approvedCanonicalMerges || null }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to normalize categories' }));
+    throw new Error(err.detail || 'Failed to normalize categories');
+  }
+  return res.json();
+}
+
+export async function adjustBudgetSpent(
+  eventId: string,
+  category: string,
+  targetSpent: number,
+  notes?: string
+): Promise<FullEventPlan> {
+  const res = await apiFetch(`/events/${eventId}/budget/adjust-spent`, {
+    method: 'POST',
+    body: JSON.stringify({
+      category,
+      target_spent: targetSpent,
+      notes,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to adjust spending' }));
+    throw new Error(err.detail || 'Failed to adjust spending');
+  }
+  return res.json();
+}
+
+export async function updateCategoryProtection(
+  eventId: string,
+  itemId: string,
+  data: { is_protected?: boolean; classification?: string }
+): Promise<BudgetItem> {
+  const res = await apiFetch(`/events/${eventId}/categories/${itemId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to update category protection' }));
+    throw new Error(err.detail || 'Failed to update category protection');
   }
   return res.json();
 }
@@ -141,9 +331,8 @@ export async function createExpense(
   eventId: string,
   data: ExpenseFormData
 ): Promise<ExpenseItem> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/expenses`, {
+  const res = await apiFetch(`/events/${eventId}/expenses`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -181,16 +370,22 @@ export async function getExpenses(
   }
 
   const queryString = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${API_BASE}/events/${eventId}/expenses${queryString}`);
-  if (!res.ok) throw new Error('Failed to fetch expenses');
+  const res = await apiFetch(`/events/${eventId}/expenses${queryString}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch expenses' }));
+    throw new Error(err.detail || 'Failed to fetch expenses');
+  }
   return res.json();
 }
 
 export async function getExpenseSummary(
   eventId: string
 ): Promise<ExpenseTrackingSummary> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/expenses/summary`);
-  if (!res.ok) throw new Error('Failed to fetch expense summary');
+  const res = await apiFetch(`/events/${eventId}/expenses/summary`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch expense summary' }));
+    throw new Error(err.detail || 'Failed to fetch expense summary');
+  }
   return res.json();
 }
 
@@ -199,9 +394,8 @@ export async function updateExpense(
   expenseId: string,
   data: Partial<ExpenseFormData>
 ): Promise<ExpenseItem> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/expenses/${expenseId}`, {
+  const res = await apiFetch(`/events/${eventId}/expenses/${expenseId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -215,18 +409,27 @@ export async function deleteExpense(
   eventId: string,
   expenseId: string
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/expenses/${expenseId}`, {
+  const res = await apiFetch(`/events/${eventId}/expenses/${expenseId}`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error('Failed to delete expense');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to delete expense' }));
+    throw new Error(err.detail || 'Failed to delete expense');
+  }
 }
 
 export function getExportExpensesCsvUrl(eventId: string): string {
-  return `${API_BASE}/events/${eventId}/expenses/export/csv`;
+  const token = getStoredToken();
+  return token
+    ? `${API_BASE}/events/${eventId}/expenses/export/csv?token=${encodeURIComponent(token)}`
+    : `${API_BASE}/events/${eventId}/expenses/export/csv`;
 }
 
 export function getExportExpensesPdfUrl(eventId: string): string {
-  return `${API_BASE}/events/${eventId}/expenses/export/pdf`;
+  const token = getStoredToken();
+  return token
+    ? `${API_BASE}/events/${eventId}/expenses/export/pdf?token=${encodeURIComponent(token)}`
+    : `${API_BASE}/events/${eventId}/expenses/export/pdf`;
 }
 
 // =========================================================
@@ -237,9 +440,8 @@ export async function createGuest(
   eventId: string,
   data: GuestFormData
 ): Promise<GuestItem> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/guests`, {
+  const res = await apiFetch(`/events/${eventId}/guests`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -267,16 +469,22 @@ export async function getGuests(
   if (filters?.sort_by) params.append('sort_by', filters.sort_by);
 
   const queryString = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${API_BASE}/events/${eventId}/guests${queryString}`);
-  if (!res.ok) throw new Error('Failed to fetch guests');
+  const res = await apiFetch(`/events/${eventId}/guests${queryString}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch guests' }));
+    throw new Error(err.detail || 'Failed to fetch guests');
+  }
   return res.json();
 }
 
 export async function getGuestSummary(
   eventId: string
 ): Promise<GuestRSVPSummary> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/guests/summary`);
-  if (!res.ok) throw new Error('Failed to fetch guest RSVP summary');
+  const res = await apiFetch(`/events/${eventId}/guests/summary`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch guest RSVP summary' }));
+    throw new Error(err.detail || 'Failed to fetch guest RSVP summary');
+  }
   return res.json();
 }
 
@@ -285,9 +493,8 @@ export async function updateGuest(
   guestId: string,
   data: Partial<GuestFormData>
 ): Promise<GuestItem> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/guests/${guestId}`, {
+  const res = await apiFetch(`/events/${eventId}/guests/${guestId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -302,9 +509,8 @@ export async function updateGuestStatus(
   guestId: string,
   statusData: { invitation_status?: string; rsvp_status?: string }
 ): Promise<GuestItem> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/guests/${guestId}/status`, {
+  const res = await apiFetch(`/events/${eventId}/guests/${guestId}/status`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(statusData),
   });
   if (!res.ok) {
@@ -318,10 +524,13 @@ export async function deleteGuest(
   eventId: string,
   guestId: string
 ): Promise<void> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/guests/${guestId}`, {
+  const res = await apiFetch(`/events/${eventId}/guests/${guestId}`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error('Failed to delete guest');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to delete guest' }));
+    throw new Error(err.detail || 'Failed to delete guest');
+  }
 }
 
 export async function previewCSVImport(
@@ -329,9 +538,8 @@ export async function previewCSVImport(
   csvContent: string,
   filename?: string
 ): Promise<CSVImportPreviewResponse> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/guests/import/preview`, {
+  const res = await apiFetch(`/events/${eventId}/guests/import/preview`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ csv_content: csvContent, filename: filename || 'guestlist.csv' }),
   });
   if (!res.ok) {
@@ -345,9 +553,8 @@ export async function confirmCSVImport(
   eventId: string,
   rows: GuestFormData[]
 ): Promise<CSVImportResult> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/guests/import/confirm`, {
+  const res = await apiFetch(`/events/${eventId}/guests/import/confirm`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ rows }),
   });
   if (!res.ok) {
@@ -358,11 +565,16 @@ export async function confirmCSVImport(
 }
 
 export function getExportGuestsCsvUrl(eventId: string, filterStatus: string = 'All'): string {
-  return `${API_BASE}/events/${eventId}/guests/export/csv?filter_status=${encodeURIComponent(filterStatus)}`;
+  const token = getStoredToken();
+  const base = `${API_BASE}/events/${eventId}/guests/export/csv?filter_status=${encodeURIComponent(filterStatus)}`;
+  return token ? `${base}&token=${encodeURIComponent(token)}` : base;
 }
 
 export function getExportGuestsPdfUrl(eventId: string): string {
-  return `${API_BASE}/events/${eventId}/guests/export/pdf`;
+  const token = getStoredToken();
+  return token
+    ? `${API_BASE}/events/${eventId}/guests/export/pdf?token=${encodeURIComponent(token)}`
+    : `${API_BASE}/events/${eventId}/guests/export/pdf`;
 }
 
 // =========================================================
@@ -370,17 +582,19 @@ export function getExportGuestsPdfUrl(eventId: string): string {
 // =========================================================
 
 export async function getInvitationTemplates(): Promise<Record<string, InvitationTemplate>> {
-  const res = await fetch(`${API_BASE}/invitations/templates`);
-  if (!res.ok) throw new Error('Failed to load invitation templates');
+  const res = await apiFetch('/invitations/templates');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to load invitation templates' }));
+    throw new Error(err.detail || 'Failed to load invitation templates');
+  }
   return res.json();
 }
 
 export async function generateInvitations(
   req: InvitationGenerateRequest
 ): Promise<InvitationGenerateResponse> {
-  const res = await fetch(`${API_BASE}/invitations/generate`, {
+  const res = await apiFetch('/invitations/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
   });
   if (!res.ok) {
@@ -394,9 +608,8 @@ export async function saveInvitation(
   eventId: string,
   req: InvitationCreateRequest
 ): Promise<InvitationItem> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/invitations`, {
+  const res = await apiFetch(`/events/${eventId}/invitations`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
   });
   if (!res.ok) {
@@ -407,39 +620,52 @@ export async function saveInvitation(
 }
 
 export async function getSavedInvitations(eventId: string): Promise<InvitationItem[]> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/invitations`);
-  if (!res.ok) throw new Error('Failed to fetch saved invitations');
+  const res = await apiFetch(`/events/${eventId}/invitations`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch saved invitations' }));
+    throw new Error(err.detail || 'Failed to fetch saved invitations');
+  }
   return res.json();
 }
 
 export async function deleteSavedInvitation(invitationId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/invitations/${invitationId}`, {
+  const res = await apiFetch(`/invitations/${invitationId}`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error('Failed to delete invitation');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to delete invitation' }));
+    throw new Error(err.detail || 'Failed to delete invitation');
+  }
 }
 
 export function getSavedInvitationPdfUrl(invitationId: string): string {
-  return `${API_BASE}/invitations/${invitationId}/export-pdf`;
+  const token = getStoredToken();
+  return token
+    ? `${API_BASE}/invitations/${invitationId}/export-pdf?token=${encodeURIComponent(token)}`
+    : `${API_BASE}/invitations/${invitationId}/export-pdf`;
 }
 
 export async function exportDynamicInvitationPdf(
   title: string,
   language: string,
   text_components: any,
-  design_config: any
+  design_config: any,
+  event_details?: any
 ): Promise<Blob> {
-  const res = await fetch(`${API_BASE}/invitations/export-pdf`, {
+  const res = await apiFetch('/invitations/export-pdf', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       title,
       language,
       text_components,
       design_config,
+      event_details,
     }),
   });
-  if (!res.ok) throw new Error('Failed to generate PDF invitation');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to generate PDF invitation' }));
+    throw new Error(err.detail || 'Failed to generate PDF invitation');
+  }
   return res.blob();
 }
 
@@ -447,7 +673,7 @@ export async function markGuestInvitationSent(
   eventId: string,
   guestId: string
 ): Promise<GuestItem> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/guests/${guestId}/mark-sent`, {
+  const res = await apiFetch(`/events/${eventId}/guests/${guestId}/mark-sent`, {
     method: 'POST',
   });
   if (!res.ok) {
@@ -482,21 +708,26 @@ export async function getVendors(filters?: {
   if (filters?.is_verified !== undefined) params.append('is_verified', filters.is_verified.toString());
 
   const queryString = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${API_BASE}/vendors${queryString}`);
-  if (!res.ok) throw new Error('Failed to fetch vendors from directory');
+  const res = await apiFetch(`/vendors${queryString}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch vendors from directory' }));
+    throw new Error(err.detail || 'Failed to fetch vendors from directory');
+  }
   return res.json();
 }
 
 export async function getVendor(vendorId: string): Promise<VendorItem> {
-  const res = await fetch(`${API_BASE}/vendors/${vendorId}`);
-  if (!res.ok) throw new Error('Failed to fetch vendor details');
+  const res = await apiFetch(`/vendors/${vendorId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch vendor details' }));
+    throw new Error(err.detail || 'Failed to fetch vendor details');
+  }
   return res.json();
 }
 
 export async function createVendor(data: VendorFormData): Promise<VendorItem> {
-  const res = await fetch(`${API_BASE}/vendors`, {
+  const res = await apiFetch('/vendors', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -507,9 +738,8 @@ export async function createVendor(data: VendorFormData): Promise<VendorItem> {
 }
 
 export async function updateVendor(vendorId: string, data: Partial<VendorFormData>): Promise<VendorItem> {
-  const res = await fetch(`${API_BASE}/vendors/${vendorId}`, {
+  const res = await apiFetch(`/vendors/${vendorId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -520,7 +750,7 @@ export async function updateVendor(vendorId: string, data: Partial<VendorFormDat
 }
 
 export async function deleteVendor(vendorId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/vendors/${vendorId}`, {
+  const res = await apiFetch(`/vendors/${vendorId}`, {
     method: 'DELETE',
   });
   if (!res.ok) {
@@ -530,10 +760,13 @@ export async function deleteVendor(vendorId: string): Promise<void> {
 }
 
 export async function toggleVendorFavorite(vendorId: string): Promise<VendorItem> {
-  const res = await fetch(`${API_BASE}/vendors/${vendorId}/favorite`, {
+  const res = await apiFetch(`/vendors/${vendorId}/favorite`, {
     method: 'PATCH',
   });
-  if (!res.ok) throw new Error('Failed to toggle favorite');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to toggle favorite' }));
+    throw new Error(err.detail || 'Failed to toggle favorite');
+  }
   return res.json();
 }
 
@@ -541,9 +774,8 @@ export async function recommendVendors(
   query: string,
   options?: { category?: string; location?: string; max_budget?: number; event_id?: string }
 ): Promise<VendorRecommendationResponse> {
-  const res = await fetch(`${API_BASE}/vendors/recommend`, {
+  const res = await apiFetch('/vendors/recommend', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       query,
       category: options?.category,
@@ -560,9 +792,8 @@ export async function recommendVendors(
 }
 
 export async function compareVendors(vendorIds: string[]): Promise<VendorComparisonResponse> {
-  const res = await fetch(`${API_BASE}/vendors/compare`, {
+  const res = await apiFetch('/vendors/compare', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ vendor_ids: vendorIds }),
   });
   if (!res.ok) {
@@ -573,8 +804,11 @@ export async function compareVendors(vendorIds: string[]): Promise<VendorCompari
 }
 
 export async function getEventBookings(eventId: string): Promise<EventVendorBookingItem[]> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/vendor-bookings`);
-  if (!res.ok) throw new Error('Failed to fetch event vendor bookings');
+  const res = await apiFetch(`/events/${eventId}/vendor-bookings`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch event vendor bookings' }));
+    throw new Error(err.detail || 'Failed to fetch event vendor bookings');
+  }
   return res.json();
 }
 
@@ -589,9 +823,8 @@ export async function createOrUpdateBooking(
     notes?: string;
   }
 ): Promise<EventVendorBookingItem> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/vendor-bookings`, {
+  const res = await apiFetch(`/events/${eventId}/vendor-bookings`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ event_id: eventId, ...data }),
   });
   if (!res.ok) {
@@ -611,9 +844,8 @@ export async function updateBooking(
     notes?: string;
   }
 ): Promise<EventVendorBookingItem> {
-  const res = await fetch(`${API_BASE}/vendor-bookings/${bookingId}`, {
+  const res = await apiFetch(`/vendor-bookings/${bookingId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -624,16 +856,22 @@ export async function updateBooking(
 }
 
 export async function deleteBooking(bookingId: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/vendor-bookings/${bookingId}`, {
+  const res = await apiFetch(`/vendor-bookings/${bookingId}`, {
     method: 'DELETE',
   });
-  if (!res.ok) throw new Error('Failed to delete booking');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to delete booking' }));
+    throw new Error(err.detail || 'Failed to delete booking');
+  }
 }
 
 export async function getEventVendorAnalytics(eventId?: string): Promise<VendorAnalyticsSummary> {
-  const url = eventId ? `${API_BASE}/events/${eventId}/vendor-analytics` : `${API_BASE}/vendor-analytics`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Failed to fetch vendor analytics');
+  const url = eventId ? `/events/${eventId}/vendor-analytics` : `/vendor-analytics`;
+  const res = await apiFetch(url);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch vendor analytics' }));
+    throw new Error(err.detail || 'Failed to fetch vendor analytics');
+  }
   return res.json();
 }
 
@@ -643,9 +881,8 @@ export async function recordBookingAdvanceExpense(
   paymentMethod: string = 'UPI',
   notes?: string
 ): Promise<ExpenseItem> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/vendor-bookings/${bookingId}/record-expense`, {
+  const res = await apiFetch(`/events/${eventId}/vendor-bookings/${bookingId}/record-expense`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ booking_id: bookingId, payment_method: paymentMethod, notes }),
   });
   if (!res.ok) {
@@ -660,7 +897,7 @@ export async function recordBookingAdvanceExpense(
 // =========================================================
 
 export async function geocodeLocation(city: string): Promise<LocationGeoResult> {
-  const res = await fetch(`${API_BASE}/weather/geocode?city=${encodeURIComponent(city)}`);
+  const res = await apiFetch(`/weather/geocode?city=${encodeURIComponent(city)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Failed to geocode location' }));
     throw new Error(err.detail || 'Failed to geocode location');
@@ -681,7 +918,7 @@ export async function getWeatherReport(
   });
   if (eventId) params.append('event_id', eventId);
 
-  const res = await fetch(`${API_BASE}/weather/report?${params.toString()}`);
+  const res = await apiFetch(`/weather/report?${params.toString()}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Failed to retrieve weather report' }));
     throw new Error(err.detail || 'Failed to retrieve weather report');
@@ -699,7 +936,7 @@ export async function getEventWeather(
   if (dateOverride) params.append('date_override', dateOverride);
 
   const queryStr = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${API_BASE}/events/${eventId}/weather${queryStr}`);
+  const res = await apiFetch(`/events/${eventId}/weather${queryStr}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Failed to retrieve event weather' }));
     throw new Error(err.detail || 'Failed to retrieve event weather');
@@ -708,9 +945,8 @@ export async function getEventWeather(
 }
 
 export async function askWeatherAssistant(query: WeatherAssistantQuery): Promise<WeatherAssistantResponse> {
-  const res = await fetch(`${API_BASE}/weather/ask-ai`, {
+  const res = await apiFetch('/weather/ask-ai', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(query),
   });
   if (!res.ok) {
@@ -724,9 +960,8 @@ export async function saveWeatherTimelineTasks(
   eventId: string,
   req: SaveTimelineMitigationsRequest
 ): Promise<SaveTimelineMitigationsResponse> {
-  const res = await fetch(`${API_BASE}/events/${eventId}/weather/save-timeline-tasks`, {
+  const res = await apiFetch(`/events/${eventId}/weather/save-timeline-tasks`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
   });
   if (!res.ok) {
@@ -740,49 +975,24 @@ export async function saveWeatherTimelineTasks(
 // PHASE 7: AUTHENTICATION & EXECUTIVE DASHBOARD API
 // =========================================================
 
-export function getStoredToken(): string | null {
-  return localStorage.getItem('eventify_token');
-}
-
-export function setStoredToken(token: string): void {
-  localStorage.setItem('eventify_token', token);
-}
-
-export function removeStoredToken(): void {
-  localStorage.removeItem('eventify_token');
-}
-
-export function getAuthHeaders(): Record<string, string> {
-  const token = getStoredToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
-
-export async function registerUser(req: RegisterRequest): Promise<TokenResponse> {
-  const res = await fetch(`${API_BASE}/auth/register`, {
+export async function registerUser(req: RegisterRequest): Promise<RegisterResponse> {
+  const res = await apiFetch('/auth/register', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
+    skipAuth: true,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Registration failed' }));
     throw new Error(err.detail || 'Registration failed');
   }
-  const data: TokenResponse = await res.json();
-  if (data.access_token) {
-    setStoredToken(data.access_token);
-  }
-  return data;
+  return res.json();
 }
 
 export async function loginUser(req: LoginRequest): Promise<TokenResponse> {
-  const res = await fetch(`${API_BASE}/auth/login`, {
+  const res = await apiFetch('/auth/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
+    skipAuth: true,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Invalid credentials' }));
@@ -796,26 +1006,26 @@ export async function loginUser(req: LoginRequest): Promise<TokenResponse> {
 }
 
 export async function getCurrentUser(): Promise<User> {
-  const res = await fetch(`${API_BASE}/auth/me`, {
-    headers: getAuthHeaders(),
-  });
+  const res = await apiFetch('/auth/me');
   if (!res.ok) {
-    throw new Error('Failed to fetch user session');
+    const err = await res.json().catch(() => ({ detail: 'Failed to fetch user session' }));
+    throw new Error(err.detail || 'Failed to fetch user session');
   }
   return res.json();
 }
 
 export function logoutUser(): void {
+  try {
+    apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
+  } catch {}
   removeStoredToken();
 }
 
 export async function getExecutiveSummary(eventId?: string): Promise<ExecutiveDashboardResponse> {
   const url = eventId
-    ? `${API_BASE}/dashboard/executive-summary?event_id=${encodeURIComponent(eventId)}`
-    : `${API_BASE}/dashboard/executive-summary`;
-  const res = await fetch(url, {
-    headers: getAuthHeaders(),
-  });
+    ? `/dashboard/executive-summary?event_id=${encodeURIComponent(eventId)}`
+    : `/dashboard/executive-summary`;
+  const res = await apiFetch(url);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Failed to retrieve executive summary' }));
     throw new Error(err.detail || 'Failed to retrieve executive summary');

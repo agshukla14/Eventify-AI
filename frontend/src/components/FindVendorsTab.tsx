@@ -98,7 +98,7 @@ const CATEGORIES: { label: string; value: string; icon: any }[] = [
 
 const LOCATIONS = ['All', 'Ahmedabad', 'Mumbai', 'Jaipur', 'Delhi', 'Bengaluru', 'Udaipur'];
 
-const CHART_COLORS = ['#0D9488', '#2563EB', '#D97706', '#E11D48', '#8B5CF6', '#10B981', '#6366F1'];
+const CHART_COLORS = ['#4f46e5', '#2563EB', '#D97706', '#E11D48', '#8B5CF6', '#10B981', '#6366F1'];
 
 export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshPlan }) => {
   // Directory & Bookings State
@@ -496,7 +496,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-16">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-teal-700 via-indigo-700 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div className="bg-gradient-to-r from-indigo-700 via-indigo-700 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold mb-3">
             <Sparkles className="w-4 h-4 text-amber-300" />
@@ -505,7 +505,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Find Vendors & Local Event Management
           </h1>
-          <p className="mt-2 text-teal-100 text-sm sm:text-base max-w-2xl leading-relaxed">
+          <p className="mt-2 text-indigo-100 text-sm sm:text-base max-w-2xl leading-relaxed">
             Discover verified celebration vendors across India with Gemini AI recommendations.
             Compare prices & reviews side-by-side, manage contracts & advance payments, and sync directly with your budget.
           </p>
@@ -525,7 +525,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
 
           <button
             onClick={handleOpenAddVendorModal}
-            className="px-4 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-900 font-bold text-xs flex items-center gap-1.5 shadow-lg transition"
+            className="px-4 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-900 font-bold text-xs flex items-center gap-1.5 shadow-lg transition"
           >
             <Plus className="w-4 h-4" />
             <span>Add Custom Vendor</span>
@@ -539,7 +539,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
           onClick={() => setViewTab('directory')}
           className={`pb-3 px-4 font-bold text-sm flex items-center gap-2 border-b-2 transition ${
             viewTab === 'directory'
-              ? 'border-teal-600 text-teal-700'
+              ? 'border-indigo-600 text-indigo-700'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -551,7 +551,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
           onClick={() => setViewTab('bookings')}
           className={`pb-3 px-4 font-bold text-sm flex items-center gap-2 border-b-2 transition ${
             viewTab === 'bookings'
-              ? 'border-teal-600 text-teal-700'
+              ? 'border-indigo-600 text-indigo-700'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -563,7 +563,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
           onClick={() => setViewTab('analytics')}
           className={`pb-3 px-4 font-bold text-sm flex items-center gap-2 border-b-2 transition ${
             viewTab === 'analytics'
-              ? 'border-teal-600 text-teal-700'
+              ? 'border-indigo-600 text-indigo-700'
               : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
@@ -601,13 +601,13 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
                   onChange={(e) => setAiPrompt(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAiSearch()}
                   placeholder='Ask in plain English: "Find wedding photographers in Ahmedabad under ₹30,000" or "Royal caterers in Jaipur"'
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:bg-white transition"
+                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
                 />
               </div>
               <button
                 onClick={handleAiSearch}
                 disabled={isAiSearching || !aiPrompt.trim()}
-                className="px-5 py-2.5 bg-gradient-to-r from-teal-600 to-indigo-600 hover:from-teal-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50"
+                className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-600 hover:from-indigo-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50"
               >
                 {isAiSearching ? (
                   <>
@@ -692,7 +692,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
                       <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                         <button
                           onClick={() => handleOpenBookingModal(rec.vendor)}
-                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition"
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition"
                         >
                           <Briefcase className="w-3.5 h-3.5" />
                           <span>Book / Manage</span>
@@ -718,7 +718,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
                     onClick={() => setSelectedCategory(cat.value)}
                     className={`px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition ${
                       isSelected
-                        ? 'bg-teal-600 text-white shadow-sm'
+                        ? 'bg-indigo-600 text-white shadow-sm'
                         : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                     }`}
                   >
@@ -789,7 +789,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
                     type="checkbox"
                     checked={verifiedOnly}
                     onChange={(e) => setVerifiedOnly(e.target.checked)}
-                    className="rounded text-teal-600 focus:ring-teal-500"
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
                   />
                   <span>Verified Only</span>
                 </label>
@@ -891,7 +891,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
 
                       {/* Category & Location */}
                       <div className="flex items-center gap-3 mt-2 text-xs text-slate-600">
-                        <span className="font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                        <span className="font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
                           {vendor.category}
                         </span>
                         <span className="flex items-center gap-1">
@@ -940,7 +940,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
                         </div>
 
                         {bookedItem && (
-                          <span className="text-[11px] font-bold px-2.5 py-1 bg-teal-50 text-teal-700 rounded-lg border border-teal-200">
+                          <span className="text-[11px] font-bold px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-200">
                             Status: {bookedItem.booking_status}
                           </span>
                         )}
@@ -950,7 +950,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
                       <div className="flex items-center gap-3 mt-2.5 text-xs text-slate-500">
                         <a
                           href={`tel:${vendor.phone}`}
-                          className="hover:text-teal-700 flex items-center gap-1"
+                          className="hover:text-indigo-700 flex items-center gap-1"
                         >
                           <Phone className="w-3 h-3 text-slate-400" />
                           <span>{vendor.phone}</span>
@@ -977,7 +977,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
                           type="checkbox"
                           checked={isCompared}
                           onChange={() => handleToggleCompare(vendor.id)}
-                          className="rounded text-teal-600 focus:ring-teal-500"
+                          className="rounded text-indigo-600 focus:ring-indigo-500"
                         />
                         <span>Compare</span>
                       </label>
@@ -1005,7 +1005,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
 
                         <button
                           onClick={() => handleOpenBookingModal(vendor)}
-                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition shadow-xs"
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition shadow-xs"
                         >
                           <Briefcase className="w-3.5 h-3.5" />
                           <span>{bookedItem ? 'Manage Booking' : 'Book for Event'}</span>
@@ -1160,7 +1160,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Directory</span>
               <p className="text-xl font-extrabold text-slate-900 mt-1">{analytics?.total_directory_vendors || vendors.length}</p>
-              <span className="text-[10px] text-teal-600 font-medium">Verified local suppliers</span>
+              <span className="text-[10px] text-indigo-600 font-medium">Verified local suppliers</span>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
@@ -1386,7 +1386,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
                 type="button"
                 onClick={handleSaveBooking}
                 disabled={isSavingBooking}
-                className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm disabled:opacity-50"
               >
                 {isSavingBooking ? 'Saving...' : 'Save Booking'}
               </button>
@@ -1429,7 +1429,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs">
                 <div className="p-2.5 bg-white rounded-lg border border-indigo-100">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Best Budget</span>
-                  <span className="font-bold text-teal-700">{comparisonData.best_budget_option}</span>
+                  <span className="font-bold text-indigo-700">{comparisonData.best_budget_option}</span>
                 </div>
                 <div className="p-2.5 bg-white rounded-lg border border-indigo-100">
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Best Rated</span>
@@ -1737,7 +1737,7 @@ export const FindVendorsTab: React.FC<FindVendorsTabProps> = ({ plan, onRefreshP
               <button
                 type="button"
                 onClick={handleSaveVendorForm}
-                className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs"
               >
                 {editingVendorId ? 'Update Vendor' : 'Add to Directory'}
               </button>

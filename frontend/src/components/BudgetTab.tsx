@@ -30,14 +30,26 @@ import {
   Layers,
   ArrowDownRight,
   ArrowUpRight,
+  Lock,
+  Unlock,
+  AlertTriangle,
+  RefreshCw,
+  GitMerge,
 } from 'lucide-react';
 import {
   FullEventPlan,
   BudgetItem,
   BudgetAnalysis,
   BudgetOptimizationResponse,
+  ExpenseClassification,
 } from '../types';
-import { getBudgetAnalysis, optimizeBudget } from '../api';
+import {
+  getBudgetAnalysis,
+  optimizeBudget,
+  normalizeCategories,
+  adjustBudgetSpent,
+  updateCategoryProtection,
+} from '../api';
 
 interface BudgetTabProps {
   plan: FullEventPlan;
@@ -45,9 +57,18 @@ interface BudgetTabProps {
 }
 
 const COLORS = [
-  '#0d9488', '#0284c7', '#8b5cf6', '#ec4899', '#f59e0b',
+  '#4f46e5', '#0284c7', '#8b5cf6', '#ec4899', '#f59e0b',
   '#10b981', '#6366f1', '#14b8a6', '#f97316', '#64748b'
 ];
+
+export const formatINR = (val: number | string | undefined | null, includeDecimals = false): string => {
+  if (val === undefined || val === null || isNaN(Number(val))) return '0';
+  const num = Number(val);
+  if (includeDecimals) {
+    return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return num.toLocaleString('en-IN');
+};
 
 const QUICK_PROMPTS = [
   'Reduce my wedding budget by ₹30,000',
@@ -68,6 +89,11 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
   // Budget Analysis State
   const [analysis, setAnalysis] = useState<BudgetAnalysis | null>(null);
   const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
+
+  // Category Normalization & Protection States
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [isNormalizing, setIsNormalizing] = useState(false);
+  const [isUpdatingProtection, setIsUpdatingProtection] = useState<string | null>(null);
 
   // AI Optimizer State
   const [optimizerPrompt, setOptimizerPrompt] = useState('');
@@ -95,6 +121,80 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
     }
   };
 
+  const handleToggleProtection = async (item: BudgetItem) => {
+    setIsUpdatingProtection(item.id);
+    try {
+      const updatedItem = await updateCategoryProtection(plan.event_id, item.id, {
+        is_protected: !item.is_protected,
+      });
+      const updatedItems = items.map(i => (i.id === item.id ? updatedItem : i));
+      const updatedPlan: FullEventPlan = {
+        ...plan,
+        budget: {
+          ...budget,
+          items: updatedItems,
+        },
+      };
+      onUpdatePlan(updatedPlan);
+      await loadAnalysis();
+    } catch (err: any) {
+      console.error('Failed to toggle category protection:', err);
+      setOptimizerError(err.message || 'Failed to update category protection status');
+    } finally {
+      setIsUpdatingProtection(null);
+    }
+  };
+
+  const handleNormalizeCategories = async () => {
+    if (isNormalizing) return;
+    setIsNormalizing(true);
+    setOptimizerError(null);
+    try {
+      const approvedMerges = analysis?.merge_suggestions?.map((s) => s.canonical_category) || [];
+      const updatedPlan = await normalizeCategories(plan.event_id, approvedMerges);
+      onUpdatePlan(updatedPlan);
+      setShowMergeModal(false);
+      setApplySuccessMessage('✨ Categories normalized and consolidated successfully!');
+      await loadAnalysis();
+      setTimeout(() => setApplySuccessMessage(null), 5000);
+    } catch (err: any) {
+      console.error('Failed to normalize categories:', err);
+      setOptimizerError(err.message || 'Failed to normalize categories');
+    } finally {
+      setIsNormalizing(false);
+    }
+  };
+
+  const renderClassificationBadge = (classification?: ExpenseClassification | string) => {
+    switch (classification) {
+      case 'essential':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 text-2xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md">
+            Essential
+          </span>
+        );
+      case 'important':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 text-2xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 rounded-md">
+            Important
+          </span>
+        );
+      case 'optional':
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 text-2xs font-semibold bg-slate-100 text-slate-600 border border-slate-200 rounded-md">
+            Optional
+          </span>
+        );
+      case 'custom':
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 text-2xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md">
+            Custom
+          </span>
+        );
+    }
+  };
+
   const handleRunOptimizer = async (promptToUse?: string) => {
     const prompt = (promptToUse || optimizerPrompt).trim();
     if (!prompt) return;
@@ -104,7 +204,8 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
     setApplySuccessMessage(null);
 
     try {
-      const res = await optimizeBudget(plan.event_id, prompt);
+      const protectedCategoryNames = items.filter(i => i.is_protected).map(i => i.category);
+      const res = await optimizeBudget(plan.event_id, prompt, protectedCategoryNames);
       setOptimizationResult(res);
     } catch (err: any) {
       setOptimizerError(err.message || 'Failed to optimize budget. Please try again.');
@@ -113,8 +214,17 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
     }
   };
 
+  const isOptimizationValid = Boolean(
+    optimizationResult &&
+    optimizationResult.is_feasible !== false &&
+    optimizationResult.is_valid !== false &&
+    (optimizationResult.revised_total_budget ?? 0) > 0 &&
+    (optimizationResult.revised_total_budget ?? 0) <= (optimizationResult.original_total_budget ?? 0) &&
+    (!optimizationResult.validation_errors || optimizationResult.validation_errors.length === 0)
+  );
+
   const handleApplyOptimization = () => {
-    if (!optimizationResult) return;
+    if (!optimizationResult || !isOptimizationValid) return;
 
     const updatedPlan: FullEventPlan = {
       ...plan,
@@ -127,7 +237,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
 
     onUpdatePlan(updatedPlan);
     setApplySuccessMessage(
-      `🎉 Successfully applied optimized budget! Total savings: ${plan.budget.currency} ${optimizationResult.total_savings.toLocaleString()}.`
+      `🎉 Successfully applied optimized budget! Total savings: ${plan.budget.currency} ${formatINR(optimizationResult.total_savings)}.`
     );
     setOptimizationResult(null);
     setOptimizerPrompt('');
@@ -166,19 +276,27 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
       }))
     : [];
 
-  const handleSaveSpent = (item: BudgetItem) => {
-    const updatedItems = items.map(i =>
-      i.id === item.id ? { ...i, actual_spent: Number(tempSpent) } : i
-    );
-    const updatedPlan: FullEventPlan = {
-      ...plan,
-      budget: {
-        ...budget,
-        items: updatedItems,
-      },
-    };
-    onUpdatePlan(updatedPlan);
-    setEditingItemId(null);
+  const handleSaveSpent = async (item: BudgetItem) => {
+    try {
+      const updatedPlan = await adjustBudgetSpent(plan.event_id, item.category, Number(tempSpent));
+      onUpdatePlan(updatedPlan);
+      setEditingItemId(null);
+      setApplySuccessMessage(`Updated actual spent for ${item.category} to ${budget.currency} ${formatINR(tempSpent)}`);
+    } catch (err: any) {
+      console.error('Failed to adjust actual spent via ledger:', err);
+      const updatedItems = items.map(i =>
+        i.id === item.id ? { ...i, actual_spent: Number(tempSpent) } : i
+      );
+      const updatedPlan: FullEventPlan = {
+        ...plan,
+        budget: {
+          ...budget,
+          items: updatedItems,
+        },
+      };
+      onUpdatePlan(updatedPlan);
+      setEditingItemId(null);
+    }
   };
 
   const handleExecuteMove = () => {
@@ -240,7 +358,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
               <div className="flex items-center gap-2">
-                <Layers className="w-5 h-5 text-teal-600" />
+                <Layers className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-base font-bold text-slate-900">Budget Health & Comprehensive Analysis</h3>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -248,37 +366,37 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1 text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 rounded-lg">
+              <span className="px-3 py-1 text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg">
                 Deterministic Invariant: 100.00%
               </span>
             </div>
           </div>
 
           {/* 4 Health Metric Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <div className="p-3.5 bg-slate-50/80 border border-slate-200/60 rounded-xl">
               <span className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Total Event Budget</span>
               <p className="text-lg font-extrabold text-slate-900 mt-0.5">
-                {analysis.total_budget.toLocaleString()} {budget.currency}
+                {formatINR(analysis.total_budget)} {budget.currency}
               </p>
               <span className="text-2xs text-slate-400">Fixed ceiling</span>
             </div>
 
             <div className="p-3.5 bg-slate-50/80 border border-slate-200/60 rounded-xl">
               <span className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Total Allocated</span>
-              <p className="text-lg font-extrabold text-teal-700 mt-0.5">
-                {analysis.total_allocated.toLocaleString()} {budget.currency}
+              <p className="text-lg font-extrabold text-indigo-700 mt-0.5">
+                {formatINR(analysis.total_allocated)} {budget.currency}
               </p>
-              <span className="text-2xs text-teal-600 font-medium">100.00% allocated</span>
+              <span className="text-2xs text-indigo-600 font-medium">100.00% allocated</span>
             </div>
 
             <div className="p-3.5 bg-slate-50/80 border border-slate-200/60 rounded-xl">
               <span className="text-2xs font-bold text-slate-400 uppercase tracking-wider">Remaining Unspent</span>
               <p className="text-lg font-extrabold text-emerald-700 mt-0.5">
-                {analysis.remaining_budget.toLocaleString()} {budget.currency}
+                {formatINR(analysis.remaining_budget)} {budget.currency}
               </p>
               <span className="text-2xs text-emerald-600 font-medium">
-                Spent: {analysis.total_actual_spent.toLocaleString()} {budget.currency}
+                Spent: {formatINR(analysis.total_actual_spent)} {budget.currency}
               </span>
             </div>
 
@@ -288,15 +406,15 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                 {analysis.highest_expense_category}
               </p>
               <span className="text-2xs font-semibold text-amber-700">
-                {analysis.highest_expense_amount.toLocaleString()} {budget.currency} ({analysis.highest_expense_percentage}%)
+                {formatINR(analysis.highest_expense_amount)} {budget.currency} ({analysis.highest_expense_percentage}%)
               </span>
             </div>
           </div>
 
           {/* Potential Savings Categories */}
           {analysis.potential_savings_categories.length > 0 && (
-            <div className="p-3 bg-teal-50/40 border border-teal-100 rounded-xl flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold text-teal-900 flex items-center gap-1.5">
+            <div className="p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
                 <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
                 <span>Categories with High Savings Potential:</span>
               </span>
@@ -307,12 +425,44 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                     onClick={() => {
                       setOptimizerPrompt(`Suggest a more affordable plan for ${cat} while preserving quality`);
                     }}
-                    className="px-2.5 py-0.5 text-2xs font-semibold bg-white text-teal-800 hover:bg-teal-100 border border-teal-200 rounded-md transition-colors"
+                    className="px-2.5 py-0.5 text-2xs font-semibold bg-white text-indigo-800 hover:bg-indigo-100 border border-indigo-200 rounded-md transition-colors"
                   >
                     ✂️ {cat}
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Duplicate / Overlapping Categories Warning Banner */}
+          {analysis.duplicate_warnings && analysis.duplicate_warnings.length > 0 && (
+            <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-amber-950">
+                    Duplicate or Overlapping Categories Detected ({analysis.duplicate_warnings.length})
+                  </h4>
+                  <p className="text-amber-800 text-xs mt-0.5">
+                    We detected multiple categories that map to the same standard event taxonomy. Consolidating them helps eliminate redundant expenses and improve AI recommendations.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {analysis.duplicate_warnings.map((w, i) => (
+                      <span key={i} className="px-2 py-0.5 bg-white/80 border border-amber-200 text-amber-900 text-2xs rounded-md font-medium">
+                        ⚠️ {w.affected_categories.join(' & ')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMergeModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-amber-950 bg-amber-200 hover:bg-amber-300 rounded-xl transition-colors shadow-2xs cursor-pointer"
+              >
+                <GitMerge className="w-4 h-4" />
+                <span>Review & Merge</span>
+              </button>
             </div>
           )}
         </div>
@@ -321,10 +471,10 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
       {/* ========================================================= */}
       {/* SECTION 2: AI BUDGET OPTIMIZER */}
       {/* ========================================================= */}
-      <div className="bg-gradient-to-br from-white via-slate-50/50 to-teal-50/30 p-6 rounded-2xl border border-teal-200/80 shadow-sm space-y-4">
+      <div className="bg-gradient-to-br from-white via-slate-50/50 to-indigo-50/30 p-6 rounded-2xl border border-indigo-200/80 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white shadow-xs">
+            <div className="p-2 rounded-xl bg-gradient-to-tr from-indigo-600 to-emerald-500 text-white shadow-xs">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
@@ -338,13 +488,45 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
             <span className={`px-2.5 py-1 text-2xs font-bold uppercase rounded-full flex items-center gap-1 ${
               optimizationResult.engine_used === 'gemini'
                 ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                : 'bg-teal-100 text-teal-800 border border-teal-200'
+                : optimizationResult.engine_used === 'deterministic_fallback'
+                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                : 'bg-indigo-100 text-indigo-800 border border-indigo-200'
             }`}>
               <Cpu className="w-3 h-3" />
-              {optimizationResult.engine_used === 'gemini' ? 'Gemini AI Model' : 'Smart Rule Engine'}
+              {optimizationResult.engine_used === 'gemini'
+                ? 'Gemini AI Model'
+                : optimizationResult.engine_used === 'deterministic_fallback'
+                ? 'Deterministic Fallback'
+                : 'Smart Rule Engine'}
             </span>
           )}
         </div>
+
+        {/* Active Protected Categories Chip Display */}
+        {items.some(i => i.is_protected) && (
+          <div className="p-3 bg-indigo-50/70 border border-indigo-200/80 rounded-xl flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+              <span className="text-xs font-bold text-indigo-950">
+                Protected Categories ({items.filter(i => i.is_protected).length}):
+              </span>
+              <span className="text-xs text-indigo-700">
+                Shielded from reductions (Min protected floor: {budget.currency} {formatINR(items.filter(i => i.is_protected).reduce((sum, i) => sum + i.allocated_amount, 0))})
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {items.filter(i => i.is_protected).map(p => (
+                <span
+                  key={p.id}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 text-2xs font-semibold bg-white text-indigo-900 border border-indigo-200 rounded-lg shadow-2xs"
+                >
+                  <Lock className="w-2.5 h-2.5 text-indigo-600" />
+                  {p.category}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Quick Suggestion Chips */}
         <div>
@@ -361,7 +543,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                   handleRunOptimizer(p);
                 }}
                 disabled={isOptimizing}
-                className="px-3 py-1 text-xs font-medium bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-900 border border-slate-200 rounded-lg shadow-2xs transition-colors"
+                className="px-3 py-1 text-xs font-medium bg-white hover:bg-indigo-50 text-slate-700 hover:text-indigo-900 border border-slate-200 rounded-lg shadow-2xs transition-colors"
               >
                 {p}
               </button>
@@ -384,12 +566,12 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
               }}
               disabled={isOptimizing}
               placeholder="e.g. Reduce my budget by ₹30,000 but keep food quality high..."
-              className="flex-1 px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-2xs"
+              className="flex-1 px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
             />
             <button
               onClick={() => handleRunOptimizer()}
               disabled={isOptimizing || !optimizerPrompt.trim()}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 disabled:opacity-50 rounded-xl shadow-xs transition-all flex-shrink-0"
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 disabled:opacity-50 rounded-xl shadow-xs transition-all flex-shrink-0 cursor-pointer"
             >
               {isOptimizing ? (
                 <>
@@ -419,20 +601,57 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
         {optimizationResult && (
           <div className="mt-6 pt-6 border-t border-slate-200/80 space-y-6 animate-in fade-in duration-300">
 
+            {/* Validation Notice for Infeasible or Erroneous Requests */}
+            {!isOptimizationValid && (
+              <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-3 text-amber-900 text-xs shadow-xs">
+                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-bold text-amber-950">
+                    {optimizationResult.is_feasible === false ? 'Budget Reduction Infeasible' : 'Optimization Feasibility Notice'}
+                  </h4>
+                  <p className="text-amber-800">
+                    {optimizationResult.validation_errors?.[0] || optimizationResult.explanation.why_recommended}
+                  </p>
+                  {optimizationResult.minimum_protected_budget !== undefined && optimizationResult.minimum_protected_budget > 0 && (
+                    <p className="text-xs font-semibold text-amber-900">
+                      Minimum Protected Budget: {plan.budget.currency} {formatINR(optimizationResult.minimum_protected_budget)}
+                    </p>
+                  )}
+                  <p className="text-2xs text-amber-700 font-semibold">
+                    The &quot;Apply New Budget&quot; button remains disabled. To achieve this target, unlock one or more protected categories or increase the requested budget.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Savings Summary Banner */}
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+            <div className={`p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4 border ${
+              isOptimizationValid
+                ? 'bg-emerald-50 border-emerald-200'
+                : 'bg-slate-50 border-slate-200'
+            }`}>
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-emerald-600 text-white rounded-xl shadow-xs">
+                <div className={`p-2.5 rounded-xl shadow-xs text-white ${
+                  isOptimizationValid ? 'bg-emerald-600' : 'bg-slate-500'
+                }`}>
                   <TrendingDown className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-2xs font-bold text-emerald-800 uppercase tracking-wider">Optimization Summary</span>
+                  <span className={`text-2xs font-bold uppercase tracking-wider ${
+                    isOptimizationValid ? 'text-emerald-800' : 'text-slate-600'
+                  }`}>
+                    Optimization Summary
+                  </span>
                   <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-xl font-extrabold text-emerald-950">
-                      Total Savings: {plan.budget.currency} {optimizationResult.total_savings.toLocaleString()}
+                    <span className={`text-xl font-extrabold ${
+                      isOptimizationValid ? 'text-emerald-950' : 'text-slate-900'
+                    }`}>
+                      Total Savings: {plan.budget.currency} {formatINR(optimizationResult.total_savings)}
                     </span>
-                    <span className="text-xs text-emerald-700 font-semibold">
-                      (Revised Budget: {plan.budget.currency} {optimizationResult.revised_total_budget.toLocaleString()})
+                    <span className={`text-xs font-semibold ${
+                      isOptimizationValid ? 'text-emerald-700' : 'text-slate-500'
+                    }`}>
+                      (Revised Budget: {plan.budget.currency} {formatINR(optimizationResult.revised_total_budget)})
                     </span>
                   </div>
                 </div>
@@ -448,11 +667,45 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                 </button>
                 <button
                   onClick={handleApplyOptimization}
-                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 rounded-xl shadow-sm transition-all"
+                  disabled={!isOptimizationValid}
+                  className={`flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white rounded-xl shadow-sm transition-all ${
+                    isOptimizationValid
+                      ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 cursor-pointer'
+                      : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
+                  }`}
+                  title={!isOptimizationValid ? 'Optimization cannot be applied due to validation constraints' : 'Apply New Budget'}
                 >
                   <Check className="w-4 h-4" />
                   <span>Apply New Budget</span>
                 </button>
+              </div>
+            </div>
+
+            {/* 4-Stat Financial Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                <span className="text-2xs font-semibold text-slate-500 uppercase tracking-wider">Original Budget</span>
+                <p className="text-base font-extrabold text-slate-900 mt-0.5">
+                  {plan.budget.currency} {formatINR(optimizationResult.original_total_budget)}
+                </p>
+              </div>
+              <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                <span className="text-2xs font-semibold text-slate-500 uppercase tracking-wider">Revised Budget</span>
+                <p className="text-base font-extrabold text-slate-900 mt-0.5">
+                  {plan.budget.currency} {formatINR(optimizationResult.revised_total_budget)}
+                </p>
+              </div>
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl shadow-2xs">
+                <span className="text-2xs font-semibold text-emerald-700 uppercase tracking-wider">Total Savings</span>
+                <p className="text-base font-extrabold text-emerald-950 mt-0.5">
+                  {plan.budget.currency} {formatINR(optimizationResult.total_savings)}
+                </p>
+              </div>
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl shadow-2xs">
+                <span className="text-2xs font-semibold text-emerald-700 uppercase tracking-wider">Savings Percentage</span>
+                <p className="text-base font-extrabold text-emerald-950 mt-0.5">
+                  {(optimizationResult.savings_percentage ?? (optimizationResult.original_total_budget > 0 ? (optimizationResult.total_savings / optimizationResult.original_total_budget) * 100 : 0)).toFixed(1)}%
+                </p>
               </div>
             </div>
 
@@ -488,13 +741,13 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
               {/* Expenses preserved */}
               <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  <Shield className="w-4 h-4 text-teal-600" />
+                  <Shield className="w-4 h-4 text-indigo-600" />
                   <span>Important Expenses Preserved</span>
                 </div>
                 <ul className="space-y-1.5 text-xs text-slate-600">
                   {optimizationResult.explanation.expenses_preserved.map((item, i) => (
                     <li key={i} className="flex items-start gap-2">
-                      <span className="text-teal-500 font-bold">✓</span>
+                      <span className="text-indigo-500 font-bold">✓</span>
                       <span>{item}</span>
                     </li>
                   ))}
@@ -525,7 +778,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                 </h4>
                 <div className="flex items-center gap-4 text-xs font-medium">
                   <span className="flex items-center gap-1.5 text-slate-600">
-                    <span className="w-3 h-3 bg-teal-600 rounded-xs inline-block" /> Original
+                    <span className="w-3 h-3 bg-indigo-600 rounded-xs inline-block" /> Original
                   </span>
                   <span className="flex items-center gap-1.5 text-slate-600">
                     <span className="w-3 h-3 bg-emerald-500 rounded-xs inline-block" /> Recommended
@@ -541,7 +794,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                     <YAxis tick={{ fontSize: 10 }} tickFormatter={val => `${val / 1000}k`} />
                     <Tooltip
                       formatter={(val: number, name: string) => [
-                        `${val.toLocaleString()} ${budget.currency}`,
+                        `${formatINR(val)} ${budget.currency}`,
                         name === 'original' ? 'Original Allocation' : 'Recommended Allocation',
                       ]}
                     />
@@ -582,24 +835,33 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                       return (
                         <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
                           <td className="px-4 py-3 font-semibold text-slate-900">
-                            {c.category}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{c.category}</span>
+                              {renderClassificationBadge(c.classification)}
+                              {c.is_protected && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-3xs font-semibold bg-amber-100 text-amber-900 border border-amber-300 rounded">
+                                  <Lock className="w-2.5 h-2.5 text-amber-700" />
+                                  Protected
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-right text-slate-600 font-medium">
-                            {c.original_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({c.original_percentage.toFixed(1)}%)
+                            {formatINR(c.original_amount, true)} ({c.original_percentage.toFixed(1)}%)
                           </td>
                           <td className="px-4 py-3 text-right font-bold text-slate-900">
-                            {c.recommended_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({c.recommended_percentage.toFixed(1)}%)
+                            {formatINR(c.recommended_amount, true)} ({c.recommended_percentage.toFixed(1)}%)
                           </td>
                           <td className="px-4 py-3 text-right font-bold">
                             {isSaving ? (
                               <span className="text-emerald-600 flex items-center justify-end gap-1">
                                 <ArrowDownRight className="w-3.5 h-3.5" />
-                                -{c.savings.toLocaleString()}
+                                -{formatINR(c.savings)}
                               </span>
                             ) : isIncrease ? (
                               <span className="text-indigo-600 flex items-center justify-end gap-1">
                                 <ArrowUpRight className="w-3.5 h-3.5" />
-                                +{Math.abs(c.savings).toLocaleString()}
+                                +{formatINR(Math.abs(c.savings))}
                               </span>
                             ) : (
                               <span className="text-slate-400">0.00</span>
@@ -640,7 +902,13 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                   </button>
                   <button
                     onClick={handleApplyOptimization}
-                    className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 rounded-xl shadow-sm transition-all"
+                    disabled={!isOptimizationValid}
+                    className={`flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white rounded-xl shadow-sm transition-all ${
+                      isOptimizationValid
+                        ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 cursor-pointer'
+                        : 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
+                    }`}
+                    title={!isOptimizationValid ? 'Optimization cannot be applied due to validation constraints' : 'Apply New Budget'}
                   >
                     <Check className="w-4 h-4" />
                     <span>Apply New Budget</span>
@@ -665,7 +933,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowMoveModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors"
           >
             <ArrowRightLeft className="w-3.5 h-3.5" />
             <span>Manual Fund Transfer</span>
@@ -695,7 +963,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(val: number) => [`${val.toLocaleString()} ${budget.currency}`, 'Allocated']}
+                  formatter={(val: number) => [`${formatINR(val)} ${budget.currency}`, 'Allocated']}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -708,7 +976,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                 <span>Contingency Reserve:</span>
               </div>
               <span className="font-bold">
-                {contingencyItem.allocated_amount.toLocaleString()} {budget.currency} ({contingencyItem.percentage}%)
+                {formatINR(contingencyItem.allocated_amount)} {budget.currency} ({contingencyItem.percentage}%)
               </span>
             </div>
           )}
@@ -723,7 +991,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" angle={-30} textAnchor="end" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={val => `${val / 1000}k`} />
-                <Tooltip formatter={(val: number) => [`${val.toLocaleString()} ${budget.currency}`]} />
+                <Tooltip formatter={(val: number) => [`${formatINR(val)} ${budget.currency}`]} />
                 <Bar dataKey="allocated" fill="#0d9488" radius={[4, 4, 0, 0]} name="Allocated" />
                 <Bar dataKey="actual" fill="#ec4899" radius={[4, 4, 0, 0]} name="Actual Spent" />
               </BarChart>
@@ -731,7 +999,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
           </div>
           <div className="flex items-center justify-center gap-6 text-xs font-medium text-slate-600 mt-2">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-teal-600 rounded-xs" />
+              <div className="w-3 h-3 bg-indigo-600 rounded-xs" />
               <span>Allocated</span>
             </div>
             <div className="flex items-center gap-2">
@@ -747,7 +1015,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <h4 className="text-sm font-bold text-slate-900">Category Allocations & Tracking</h4>
           <span className="text-xs font-medium text-slate-500">
-            Click edit icon to record actual expenditures
+            Click edit icon to record expenditures or protect essential categories from AI reductions
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -755,6 +1023,8 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
             <thead className="bg-slate-50/80 text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
               <tr>
                 <th className="px-5 py-3 font-semibold">Category</th>
+                <th className="px-3 py-3 font-semibold text-center">Classification</th>
+                <th className="px-3 py-3 font-semibold text-center">Protection</th>
                 <th className="px-5 py-3 font-semibold text-right">Allocation (%)</th>
                 <th className="px-5 py-3 font-semibold text-right">Budget ({budget.currency})</th>
                 <th className="px-5 py-3 font-semibold text-right">Actual Spent ({budget.currency})</th>
@@ -778,11 +1048,41 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                         </span>
                       )}
                     </td>
+                    <td className="px-3 py-3.5 text-center">
+                      {renderClassificationBadge(item.classification)}
+                    </td>
+                    <td className="px-3 py-3.5 text-center">
+                      <button
+                        type="button"
+                        disabled={isUpdatingProtection === item.id}
+                        onClick={() => handleToggleProtection(item)}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 text-2xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                          item.is_protected
+                            ? 'bg-amber-100/90 text-amber-950 border-amber-300 hover:bg-amber-200 shadow-2xs'
+                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 hover:text-slate-800'
+                        }`}
+                        title={item.is_protected ? 'Protected category: shielded from budget cuts. Click to unlock.' : 'Click to protect category from budget cuts.'}
+                      >
+                        {isUpdatingProtection === item.id ? (
+                          <RefreshCw className="w-3 h-3 animate-spin text-amber-700" />
+                        ) : item.is_protected ? (
+                          <>
+                            <Lock className="w-3 h-3 text-amber-700" />
+                            <span>Protected</span>
+                          </>
+                        ) : (
+                          <>
+                            <Unlock className="w-3 h-3 text-slate-400" />
+                            <span>Protect</span>
+                          </>
+                        )}
+                      </button>
+                    </td>
                     <td className="px-5 py-3.5 text-right font-semibold text-slate-700">
                       {item.percentage.toFixed(2)}%
                     </td>
                     <td className="px-5 py-3.5 text-right font-medium text-slate-900">
-                      {item.allocated_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {formatINR(item.allocated_amount, true)}
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       {isEditing ? (
@@ -792,12 +1092,12 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                             min="0"
                             value={tempSpent}
                             onChange={e => setTempSpent(Number(e.target.value))}
-                            className="w-24 px-2 py-1 text-xs border border-teal-500 rounded focus:outline-none"
+                            className="w-24 px-2 py-1 text-xs border border-indigo-500 rounded focus:outline-none"
                             autoFocus
                           />
                           <button
                             onClick={() => handleSaveSpent(item)}
-                            className="p-1 text-white bg-teal-600 hover:bg-teal-700 rounded transition-colors"
+                            className="p-1 text-white bg-indigo-600 hover:bg-indigo-700 rounded transition-colors"
                           >
                             <Check className="w-3.5 h-3.5" />
                           </button>
@@ -805,14 +1105,14 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                       ) : (
                         <div className="flex items-center justify-end gap-1.5 group">
                           <span className={`font-semibold ${isOver ? 'text-rose-600' : 'text-slate-800'}`}>
-                            {item.actual_spent.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            {formatINR(item.actual_spent, true)}
                           </span>
                           <button
                             onClick={() => {
                               setEditingItemId(item.id);
                               setTempSpent(item.actual_spent);
                             }}
-                            className="p-1 text-slate-400 group-hover:text-teal-600 hover:bg-slate-100 rounded transition-colors"
+                            className="p-1 text-slate-400 group-hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
@@ -843,13 +1143,13 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
             {/* Totals Row */}
             <tfoot className="bg-slate-50/80 font-bold text-slate-900 border-t border-slate-200">
               <tr>
-                <td className="px-5 py-3.5">TOTAL ALLOCATION</td>
+                <td className="px-5 py-3.5" colSpan={3}>TOTAL ALLOCATION</td>
                 <td className="px-5 py-3.5 text-right">100.00%</td>
-                <td className="px-5 py-3.5 text-right font-extrabold text-teal-700">
-                  {budget.total_allocated.toLocaleString(undefined, { minimumFractionDigits: 2 })} {budget.currency}
+                <td className="px-5 py-3.5 text-right font-extrabold text-indigo-700">
+                  {formatINR(budget.total_allocated, true)} {budget.currency}
                 </td>
                 <td className="px-5 py-3.5 text-right font-extrabold text-slate-900">
-                  {budget.total_actual_spent.toLocaleString(undefined, { minimumFractionDigits: 2 })} {budget.currency}
+                  {formatINR(budget.total_actual_spent, true)} {budget.currency}
                 </td>
                 <td colSpan={2} className="px-5 py-3.5 text-xs text-slate-500 text-right">
                   Exact Match Deterministic Guarantee
@@ -875,10 +1175,10 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                 <select
                   value={sourceCat}
                   onChange={e => setSourceCat(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {items.map(i => (
-                    <option key={i.id} value={i.category}>{i.category} ({i.allocated_amount.toLocaleString()} {budget.currency})</option>
+                    <option key={i.id} value={i.category}>{i.category} ({formatINR(i.allocated_amount)} {budget.currency})</option>
                   ))}
                 </select>
               </div>
@@ -888,10 +1188,10 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                 <select
                   value={targetCat}
                   onChange={e => setTargetCat(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {items.map(i => (
-                    <option key={i.id} value={i.category}>{i.category} ({i.allocated_amount.toLocaleString()} {budget.currency})</option>
+                    <option key={i.id} value={i.category}>{i.category} ({formatINR(i.allocated_amount)} {budget.currency})</option>
                   ))}
                 </select>
               </div>
@@ -903,7 +1203,7 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
                   min="1"
                   value={moveAmount}
                   onChange={e => setMoveAmount(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
             </div>
@@ -912,16 +1212,108 @@ export const BudgetTab: React.FC<BudgetTabProps> = ({ plan, onUpdatePlan }) => {
               <button
                 type="button"
                 onClick={() => setShowMoveModal(false)}
-                className="px-3.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                className="px-3.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleExecuteMove}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors shadow-xs"
+                className="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-xs cursor-pointer"
               >
                 Apply Reallocation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Review & Consolidate Categories Modal */}
+      {showMergeModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <GitMerge className="w-5 h-5 text-indigo-600" />
+                <h4 className="text-base font-bold text-slate-900">Consolidate Budget Categories</h4>
+              </div>
+              <button
+                disabled={isNormalizing}
+                onClick={() => setShowMergeModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Our taxonomy engine identified duplicate or overlapping categories. Consolidating into canonical categories unifies expense tracking and ensures reliable AI budget optimization.
+            </p>
+
+            <div className="overflow-y-auto space-y-3 flex-1 pr-1">
+              {analysis?.merge_suggestions && analysis.merge_suggestions.length > 0 ? (
+                analysis.merge_suggestions.map((sug, idx) => (
+                  <div key={idx} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <span className="text-indigo-600">Target Canonical:</span>
+                        <span className="px-2 py-0.5 bg-indigo-100 text-indigo-900 rounded font-semibold text-2xs">
+                          {sug.canonical_category}
+                        </span>
+                      </span>
+                      <span className="text-2xs font-semibold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">
+                        Confidence: {(sug.confidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-600 flex items-center gap-1.5">
+                      <span className="font-semibold text-slate-700">Merging:</span>
+                      <span className="text-slate-900 font-medium">{sug.source_categories.join(' + ')}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-2xs text-slate-500 pt-1 border-t border-slate-200/60">
+                      <span>Combined Allocation: {budget.currency} {formatINR(sug.combined_allocation)}</span>
+                      <span>Spent: {budget.currency} {formatINR(sug.combined_spent)}</span>
+                    </div>
+
+                    <p className="text-2xs text-slate-500 italic">
+                      {sug.rationale}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 text-center text-xs text-slate-500">
+                  All categories are currently normalized to the canonical taxonomy.
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isNormalizing}
+                onClick={() => setShowMergeModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isNormalizing || !analysis?.merge_suggestions || analysis.merge_suggestions.length === 0}
+                onClick={handleNormalizeCategories}
+                className="flex items-center gap-2 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl transition-all shadow-xs cursor-pointer"
+              >
+                {isNormalizing ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Consolidating...</span>
+                  </>
+                ) : (
+                  <>
+                    <GitMerge className="w-3.5 h-3.5" />
+                    <span>Approve & Consolidate All</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

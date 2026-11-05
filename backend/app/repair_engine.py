@@ -1,5 +1,5 @@
 from datetime import datetime, date, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import uuid
 import re
 
@@ -43,14 +43,14 @@ MANDATORY_VENDORS = {
 # Standard budget categories by event type
 DEFAULT_BUDGET_CATEGORIES = {
     "wedding": [
-        ("Venue & Lodging", 25.0, True),
-        ("Catering & Bar", 25.0, True),
-        ("Decor & Floral", 12.0, True),
+        ("Venue & Accommodation", 25.0, True),
+        ("Catering & Beverages", 25.0, True),
+        ("Decoration & Floral", 12.0, True),
         ("Photography & Videography", 10.0, True),
         ("Entertainment & Music", 7.0, True),
-        ("Attire & Beauty", 6.0, True),
+        ("Attire & Styling", 6.0, True),
         ("Invitations & Stationery", 3.0, False),
-        ("Logistics & Transport", 4.0, False),
+        ("Logistics & Transportation", 4.0, False),
         ("Contingency", 8.0, True),
     ],
     "birthday": [
@@ -82,41 +82,133 @@ def parse_date_safe(date_str: str) -> date:
         return date.today() + timedelta(days=30)
 
 
+def extract_event_start_time(intake: EventIntake) -> Optional[str]:
+    """
+    Universally extracts the event start time from intake fields or descriptive text.
+    Applies to any event type and title.
+    """
+    for attr in ("start_time", "event_time"):
+        val = getattr(intake, attr, None)
+        if val:
+            return str(val).strip()
+
+    import re
+    # Check text fields (theme_style, cultural_preferences, must_haves) for time strings like '7:00 PM', '19:00', '7 PM onwards'
+    texts_to_check = []
+    if getattr(intake, "theme_style", None):
+        texts_to_check.append(str(intake.theme_style))
+    if getattr(intake, "cultural_preferences", None):
+        texts_to_check.append(str(intake.cultural_preferences))
+    if getattr(intake, "must_haves", None) and isinstance(intake.must_haves, list):
+        texts_to_check.extend([str(x) for x in intake.must_haves])
+
+    for t in texts_to_check:
+        m = re.search(r"(\b\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)(?:\s+onwards)?\b|\b(?:1[0-9]|2[0-3]|0?[0-9]):[0-5][0-9]\b)", t)
+        if m:
+            return m.group(1)
+
+    return None
+
+
+def parse_start_time_hour(raw_time: Optional[str], default_hr: int = 19, default_mn: int = 0) -> Tuple[int, int]:
+    """
+    Parses start time strings like '7:00 PM', '7:00 PM onwards', '19:00', '19:30', '16:00'.
+    Returns (hour, minute) in 24-hour format.
+    """
+    if not raw_time:
+        return (default_hr, default_mn)
+    import re
+    m = re.search(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", str(raw_time).strip().lower())
+    if not m:
+        return (default_hr, default_mn)
+    hr = int(m.group(1))
+    mn = int(m.group(2)) if m.group(2) else 0
+    ampm = m.group(3)
+    if ampm == "pm" and hr < 12:
+        hr += 12
+    elif ampm == "am" and hr == 12:
+        hr = 0
+    return (hr, mn)
+
+
+def format_time_window(start_hr: int, start_mn: int, end_hr: int, end_mn: int) -> str:
+    s_h = start_hr % 24
+    e_h = end_hr % 24
+    return f"{s_h:02d}:{start_mn:02d} - {e_h:02d}:{end_mn:02d}"
+
+
+def build_realistic_run_of_show(intake: EventIntake) -> List[Tuple[str, str, str, str, str]]:
+    raw_time = extract_event_start_time(intake)
+
+    if intake.event_type == "wedding":
+        s_hr, s_mn = parse_start_time_hour(raw_time, default_hr=19, default_mn=0)
+        prep1_start = (s_hr - 4) % 24
+        prep1_end = (s_hr - 2) % 24
+        prep2_start = (s_hr - 2) % 24
+        prep3_start = (s_hr - 1) % 24
+
+        return [
+            (format_time_window(prep1_start, 0, prep1_end, 0), "Pre-Event Setup: Vendor Arrivals & Venue Decor Setup", "Event Lead & Florist", "Main Hall", "AV soundcheck, floral mandap installation & stage lighting"),
+            (format_time_window(prep2_start, 0, prep3_start, 30), "Pre-Event Setup: Bridal & Groom Prep / Makeup & Styling", "Lead Stylist", "Bridal Suite", "Hair, styling, wardrobe & final readiness check"),
+            (format_time_window(prep3_start, 30, s_hr, s_mn), "Pre-Event Setup: Photographer Pre-Ceremony Portraits", "Lead Photographer", "Garden / Foyer", "Immediate family and solo portraits before guest arrival"),
+            (format_time_window(s_hr, s_mn, s_hr, s_mn + 45), "Guest Arrival & Welcome Refreshments", "Welcome Host & MC", "Entrance Lobby", "Welcome drinks, appetizers & guest seating ushering"),
+            (format_time_window(s_hr, s_mn + 45, (s_hr + 2) % 24, 15), "Ceremony & Traditional Rituals", "Officiant / MC", "Mandap / Main Altar", "Audio mics live, traditional Vedic vows & exchange"),
+            (format_time_window((s_hr + 2) % 24, 15, (s_hr + 3) % 24, 45), "Grand Banquet Dinner & Family Speeches", "Caterer & Toastmaster", "Dining Hall", "Plated/buffet dinner service, celebratory speeches & photography"),
+            (format_time_window((s_hr + 3) % 24, 45, (s_hr + 4) % 24, 45), "Live Music, Dancing & Celebration", "DJ / Band", "Dance Floor", "First dance, sangeet performances & open celebratory music"),
+            (format_time_window((s_hr + 4) % 24, 45, (s_hr + 5) % 24, 30), "Grand Send-Off & Teardown", "Event Coordinator", "Exit Gate", "Gift distribution, guest farewell & vendor breakdown"),
+        ]
+    elif intake.event_type == "birthday":
+        s_hr, s_mn = parse_start_time_hour(raw_time, default_hr=16, default_mn=0)
+        prep1_start = (s_hr - 2) % 24
+        prep2_start = (s_hr - 1) % 24
+        return [
+            (format_time_window(prep1_start, 0, prep2_start, 30), "Pre-Event Setup: Venue Access & Decorator Setup", "Party Coordinator", "Party Hall", "Balloons, backdrop, table setups and entertainment prep"),
+            (format_time_window(prep2_start, 30, s_hr, s_mn), "Pre-Event Setup: Cake Delivery Check & AV Soundcheck", "Helper Lead", "Pantry Area", "Check cake integrity, food warming, and playlist setup"),
+            (format_time_window(s_hr, s_mn, s_hr, s_mn + 30), "Guest Arrival & Welcome Tattoo/Photo Station", "Welcome Greeter", "Entrance", "Kids nametags, photo booth and welcome drinks"),
+            (format_time_window(s_hr, s_mn + 30, (s_hr + 1) % 24, 30), "Interactive Games & Entertainer Show", "MC / Magician / Host", "Main Floor", "Age-appropriate group games, magic show and balloon modeling"),
+            (format_time_window((s_hr + 1) % 24, 30, (s_hr + 2) % 24, 0), "Cake Cutting Ceremony & Birthday Songs", "Family & MC", "Stage Area", "Sparkler candles, birthday toast, and cake distribution"),
+            (format_time_window((s_hr + 2) % 24, 0, (s_hr + 3) % 24, 0), "Buffet Dinner / Snacks & Mingling", "Catering Lead", "Dining Area", "Kid-friendly & adult food stations"),
+            (format_time_window((s_hr + 3) % 24, 0, (s_hr + 3) % 24, 45), "Dance Party & Pinata Smash", "DJ / Host", "Dance Area", "High-energy playlist & pinata fun"),
+            (format_time_window((s_hr + 3) % 24, 45, (s_hr + 4) % 24, 15), "Return Gifts Handout & Farewell", "Host Family", "Exit Counter", "Personalized favors distribution and teardown"),
+        ]
+    else:  # community
+        s_hr, s_mn = parse_start_time_hour(raw_time, default_hr=9, default_mn=0)
+        prep1_start = (s_hr - 2) % 24
+        prep2_start = (s_hr - 1) % 24
+        return [
+            (format_time_window(prep1_start, 0, prep2_start, 30), "Pre-Event Setup: Grounds, Stage & Sound Engineering", "Sound Crew Lead", "Main Grounds", "Power test, microphones, emergency exit verify"),
+            (format_time_window(prep2_start, 30, s_hr, s_mn), "Pre-Event Setup: Volunteer Briefing & Registration Canopy", "Volunteer Coordinator", "Registration Canopy", "Distribute badges, lanyards, schedules & safety checks"),
+            (format_time_window(s_hr, s_mn, s_hr, s_mn + 45), "Guest Arrival & Registration Desk Open", "Registration Team", "Main Entrance", "Welcome badges, event maps and orientation"),
+            (format_time_window(s_hr, s_mn + 45, (s_hr + 1) % 24, 30), "Opening Ceremony & Welcome Address", "Community Lead", "Main Stage", "Welcome speech & safety announcement"),
+            (format_time_window((s_hr + 1) % 24, 30, (s_hr + 4) % 24, 0), "Main Events, Workshops & Interactive Stalls", "Stage Manager", "Event Zone", "Rotational activities, community workshops, and exhibits"),
+            (format_time_window((s_hr + 4) % 24, 0, (s_hr + 5) % 24, 15), "Community Lunch & Refreshment Break", "Food Committee", "Catering Tents", "Organized food service & waste sorting"),
+            (format_time_window((s_hr + 5) % 24, 15, (s_hr + 7) % 24, 30), "Performances, Competitions & Keynote", "Cultural Secretary", "Main Stage", "Community showcases & youth activities"),
+            (format_time_window((s_hr + 7) % 24, 30, (s_hr + 8) % 24, 30), "Awards Ceremony & Volunteer Recognition", "Event Chair", "Main Stage", "Felicitation and trophy distribution"),
+            (format_time_window((s_hr + 8) % 24, 30, (s_hr + 9) % 24, 30), "Ground Cleandown, Waste Segregation & Security Sign-off", "Safety & Waste Team", "Entire Facility", "Leave ground spotless and return keys"),
+        ]
+
+
 class DeterministicRepairEngine:
     @staticmethod
     def repair_budget(
         raw_items: Optional[List[Dict[str, Any]]],
         intake: EventIntake,
-        contingency_pct: float = 8.0
+        contingency_pct: float = 8.0,
+        preserve_categories_only: bool = False,
     ) -> BudgetSummary:
         """
         Enforces deterministic arithmetic:
         1. Guarantees 5-10% contingency.
         2. Normalizes percentages so sum == 100.00%.
         3. Normalizes amounts so sum == total_budget.
-        4. Injects mandatory categories if missing.
+        4. Injects mandatory categories if missing (unless preserve_categories_only is True).
         """
         total_budget = max(0.0, float(intake.total_budget))
         contingency_pct = max(5.0, min(10.0, float(contingency_pct)))
 
-        # 1. Collect or seed categories
-        defaults = DEFAULT_BUDGET_CATEGORIES.get(intake.event_type, DEFAULT_BUDGET_CATEGORIES["wedding"])
         items_dict: Dict[str, Dict[str, Any]] = {}
 
-        # Add defaults first
-        for cat_name, def_pct, is_mand in defaults:
-            items_dict[cat_name.lower()] = {
-                "id": str(uuid.uuid4())[:8],
-                "category": cat_name,
-                "weight": def_pct,
-                "is_contingency": cat_name.lower() == "contingency",
-                "is_mandatory": is_mand,
-                "notes": f"Standard allocation for {intake.event_type}",
-                "actual_spent": 0.0,
-            }
-
-        # Override or supplement with raw_items if provided
-        if raw_items:
+        if preserve_categories_only and raw_items:
             for item in raw_items:
                 cat = item.get("category", "").strip()
                 if not cat:
@@ -125,23 +217,83 @@ class DeterministicRepairEngine:
                 weight = float(item.get("weight", item.get("percentage", 1.0)))
                 actual_spent = float(item.get("actual_spent", 0.0))
                 notes = item.get("notes", "")
-                is_contingency = "contingency" in cat_key
+                is_contingency = item.get("is_contingency", "contingency" in cat_key)
+                items_dict[cat_key] = {
+                    "id": item.get("id", str(uuid.uuid4())[:8]),
+                    "category": cat,
+                    "weight": max(0.1, weight),
+                    "is_contingency": is_contingency,
+                    "is_mandatory": item.get("is_mandatory", is_contingency),
+                    "notes": notes,
+                    "actual_spent": max(0.0, actual_spent),
+                    "canonical_category": item.get("canonical_category"),
+                    "classification": item.get("classification"),
+                    "is_protected": bool(item.get("is_protected", False)),
+                    "allocated_amount": item.get("allocated_amount"),
+                    "percentage": item.get("percentage"),
+                }
+        else:
+            # 1. Collect or seed categories from defaults
+            defaults = DEFAULT_BUDGET_CATEGORIES.get(intake.event_type, DEFAULT_BUDGET_CATEGORIES["wedding"])
 
-                if cat_key in items_dict:
-                    items_dict[cat_key]["weight"] = max(0.1, weight)
-                    items_dict[cat_key]["actual_spent"] = max(0.0, actual_spent)
-                    if notes:
-                        items_dict[cat_key]["notes"] = notes
-                else:
-                    items_dict[cat_key] = {
-                        "id": str(uuid.uuid4())[:8],
-                        "category": cat,
-                        "weight": max(0.1, weight),
-                        "is_contingency": is_contingency,
-                        "is_mandatory": False,
-                        "notes": notes,
-                        "actual_spent": max(0.0, actual_spent),
-                    }
+            # Add defaults first
+            for cat_name, def_pct, is_mand in defaults:
+                items_dict[cat_name.lower()] = {
+                    "id": str(uuid.uuid4())[:8],
+                    "category": cat_name,
+                    "weight": def_pct,
+                    "is_contingency": cat_name.lower() == "contingency",
+                    "is_mandatory": is_mand,
+                    "notes": f"Standard allocation for {intake.event_type}",
+                    "actual_spent": 0.0,
+                    "is_protected": False,
+                    "classification": "essential" if cat_name.lower() == "contingency" else "important",
+                }
+
+            # Override or supplement with raw_items if provided
+            if raw_items:
+                for item in raw_items:
+                    cat = item.get("category", "").strip()
+                    if not cat:
+                        continue
+                    cat_key = cat.lower()
+                    weight = float(item.get("weight", item.get("percentage", 1.0)))
+                    actual_spent = float(item.get("actual_spent", 0.0))
+                    notes = item.get("notes", "")
+                    is_contingency = "contingency" in cat_key
+
+                    if cat_key in items_dict:
+                        if item.get("id"):
+                            items_dict[cat_key]["id"] = item["id"]
+                        items_dict[cat_key]["weight"] = max(0.1, weight)
+                        items_dict[cat_key]["actual_spent"] = max(0.0, actual_spent)
+                        if notes:
+                            items_dict[cat_key]["notes"] = notes
+                        if "is_protected" in item:
+                            items_dict[cat_key]["is_protected"] = bool(item["is_protected"])
+                        if "classification" in item:
+                            items_dict[cat_key]["classification"] = item["classification"]
+                        if "canonical_category" in item:
+                            items_dict[cat_key]["canonical_category"] = item["canonical_category"]
+                        if "allocated_amount" in item and item["allocated_amount"] is not None:
+                            items_dict[cat_key]["allocated_amount"] = item["allocated_amount"]
+                        if "percentage" in item and item["percentage"] is not None:
+                            items_dict[cat_key]["percentage"] = item["percentage"]
+                    else:
+                        items_dict[cat_key] = {
+                            "id": item.get("id") or str(uuid.uuid4())[:8],
+                            "category": cat,
+                            "weight": max(0.1, weight),
+                            "is_contingency": is_contingency,
+                            "is_mandatory": False,
+                            "notes": notes,
+                            "actual_spent": max(0.0, actual_spent),
+                            "canonical_category": item.get("canonical_category"),
+                            "classification": item.get("classification"),
+                            "is_protected": bool(item.get("is_protected", False)),
+                            "allocated_amount": item.get("allocated_amount"),
+                            "percentage": item.get("percentage"),
+                        }
 
         # Guarantee contingency exists
         has_contingency = any(v["is_contingency"] for v in items_dict.values())
@@ -154,46 +306,66 @@ class DeterministicRepairEngine:
                 "is_mandatory": True,
                 "notes": "Emergency reserve for unforeseen costs",
                 "actual_spent": 0.0,
+                "is_protected": False,
+                "classification": "essential",
             }
 
         contingency_entry = next(v for v in items_dict.values() if v["is_contingency"])
         non_contingency_entries = [v for v in items_dict.values() if not v["is_contingency"]]
 
-        # 2. Deterministic Weight Normalization
-        remaining_pct = 100.0 - contingency_pct
-        total_non_con_weight = sum(v["weight"] for v in non_contingency_entries)
-        if total_non_con_weight <= 0:
-            total_non_con_weight = float(len(non_contingency_entries))
+        # Check if incoming items already have exact valid allocations that sum to total_budget
+        incoming_allocated_sum = round(sum(float(v.get("allocated_amount") or 0.0) for v in items_dict.values()), 2)
+        has_exact_allocations = (
+            preserve_categories_only
+            and total_budget > 0
+            and abs(incoming_allocated_sum - total_budget) < 0.05
+            and all(v.get("allocated_amount") is not None for v in items_dict.values())
+        )
+
+        if has_exact_allocations:
+            for v in items_dict.values():
+                v["allocated_amount"] = round(float(v["allocated_amount"]), 2)
+                v["percentage"] = round((v["allocated_amount"] / total_budget) * 100.0, 2)
+            pct_diff = round(100.0 - sum(v["percentage"] for v in items_dict.values()), 2)
+            if pct_diff != 0.0 and non_contingency_entries:
+                largest = max(non_contingency_entries, key=lambda x: x["percentage"])
+                largest["percentage"] = round(largest["percentage"] + pct_diff, 2)
+        else:
+            # 2. Deterministic Weight Normalization
+            remaining_pct = 100.0 - contingency_pct
+            total_non_con_weight = sum(v["weight"] for v in non_contingency_entries)
+            if total_non_con_weight <= 0:
+                total_non_con_weight = float(len(non_contingency_entries))
+                for v in non_contingency_entries:
+                    v["weight"] = 1.0
+
+            # Calculate percentages
+            allocated_pcts = []
             for v in non_contingency_entries:
-                v["weight"] = 1.0
+                pct = round((v["weight"] / total_non_con_weight) * remaining_pct, 2)
+                v["percentage"] = pct
+                allocated_pcts.append(pct)
 
-        # Calculate percentages
-        allocated_pcts = []
-        for v in non_contingency_entries:
-            pct = round((v["weight"] / total_non_con_weight) * remaining_pct, 2)
-            v["percentage"] = pct
-            allocated_pcts.append(pct)
+            contingency_entry["percentage"] = round(contingency_pct, 2)
 
-        contingency_entry["percentage"] = round(contingency_pct, 2)
+            # Reconcile any rounding diff on percentage
+            current_sum_pct = round(sum(v["percentage"] for v in non_contingency_entries) + contingency_entry["percentage"], 2)
+            pct_diff = round(100.0 - current_sum_pct, 2)
+            if pct_diff != 0.0 and non_contingency_entries:
+                largest_entry = max(non_contingency_entries, key=lambda x: x["percentage"])
+                largest_entry["percentage"] = round(largest_entry["percentage"] + pct_diff, 2)
 
-        # Reconcile any rounding diff on percentage
-        current_sum_pct = round(sum(v["percentage"] for v in non_contingency_entries) + contingency_entry["percentage"], 2)
-        pct_diff = round(100.0 - current_sum_pct, 2)
-        if pct_diff != 0.0 and non_contingency_entries:
-            largest_entry = max(non_contingency_entries, key=lambda x: x["percentage"])
-            largest_entry["percentage"] = round(largest_entry["percentage"] + pct_diff, 2)
+            # 3. Calculate Currency Amounts
+            for v in items_dict.values():
+                raw_amt = round((v["percentage"] / 100.0) * total_budget, 2)
+                v["allocated_amount"] = raw_amt
 
-        # 3. Calculate Currency Amounts
-        for v in items_dict.values():
-            raw_amt = round((v["percentage"] / 100.0) * total_budget, 2)
-            v["allocated_amount"] = raw_amt
-
-        # Reconcile rounding diff on total amount
-        current_sum_amt = round(sum(v["allocated_amount"] for v in items_dict.values()), 2)
-        amt_diff = round(total_budget - current_sum_amt, 2)
-        if amt_diff != 0.0 and non_contingency_entries:
-            largest_entry = max(non_contingency_entries, key=lambda x: x["allocated_amount"])
-            largest_entry["allocated_amount"] = round(largest_entry["allocated_amount"] + amt_diff, 2)
+            # Reconcile rounding diff on total amount
+            current_sum_amt = round(sum(v["allocated_amount"] for v in items_dict.values()), 2)
+            amt_diff = round(total_budget - current_sum_amt, 2)
+            if amt_diff != 0.0 and non_contingency_entries:
+                largest_entry = max(non_contingency_entries, key=lambda x: x["allocated_amount"])
+                largest_entry["allocated_amount"] = round(largest_entry["allocated_amount"] + amt_diff, 2)
 
         # Build final BudgetItem list
         final_items: List[BudgetItem] = []
@@ -219,6 +391,9 @@ class DeterministicRepairEngine:
                     is_contingency=v["is_contingency"],
                     is_mandatory=v["is_mandatory"],
                     notes=v["notes"],
+                    canonical_category=v.get("canonical_category"),
+                    classification=v.get("classification") or ("essential" if v["is_contingency"] else "important"),
+                    is_protected=bool(v.get("is_protected", False)),
                 )
             )
 
@@ -368,56 +543,28 @@ class DeterministicRepairEngine:
 
         # Day-Of Hourly Run of Show
         run_of_show_items: List[RunOfShowItem] = []
-        if raw_run_of_show and len(raw_run_of_show) >= 4:
-            for r in raw_run_of_show:
-                run_of_show_items.append(
-                    RunOfShowItem(
-                        id=r.get("id") or str(uuid.uuid4())[:8],
-                        time_slot=r.get("time_slot", "09:00 - 10:00"),
-                        activity=r.get("activity", "Activity"),
-                        lead_person=r.get("lead_person", "Coordinator"),
-                        location=r.get("location", "Main Venue"),
-                        notes=r.get("notes", ""),
-                    )
-                )
-        else:
-            # Deterministic default run-of-show
-            if intake.event_type == "wedding":
-                default_ros = [
-                    ("08:00 - 10:00", "Bridal & Groom Prep / Makeup & Hair", "Lead Stylist", "Bridal Suite", "Keep breakfast & water ready"),
-                    ("10:00 - 11:30", "Vendor Arrivals & Venue Decor Setup", "Event Lead & Florist", "Main Hall", "AV soundcheck, floral arch installation"),
-                    ("11:30 - 12:30", "Photographer Pre-Ceremony Portraits", "Lead Photographer", "Garden / Foyer", "Family & wedding party shots"),
-                    ("12:30 - 13:30", "Guest Arrival & Welcome Refreshments", "Welcome Host", "Entrance Lobby", "Welcome drinks & seating ushering"),
-                    ("13:30 - 15:00", "Ceremony & Traditional Rituals", "Officiant / MC", "Mandap / Main Altar", "Audio mics live, ring exchange/vows"),
-                    ("15:00 - 16:30", "Cocktail Hour & Guest Photography", "Catering Lead", "Courtyard", "Passed hors d'oeuvres, music"),
-                    ("16:30 - 19:30", "Grand Banquet Lunch / Dinner & Speeches", "Caterer & Toastmaster", "Dining Hall", "Buffet/plated meal service, speeches"),
-                    ("19:30 - 22:30", "Live Music, Dancing & Celebration", "DJ / Band", "Dance Floor", "First dance, open dance floor"),
-                    ("22:30 - 23:30", "Grand Send-Off & Teardown", "Event Coordinator", "Exit Gate", "Gift distribution & vendor breakdown"),
-                ]
-            elif intake.event_type == "birthday":
-                default_ros = [
-                    ("14:00 - 15:00", "Venue Access & Decorator Setup", "Party Coordinator", "Party Hall", "Balloons, backdrop, table setups"),
-                    ("15:00 - 15:30", "Cake & Catering Delivery Check", "Helper Lead", "Pantry Area", "Check cake integrity and food warming"),
-                    ("15:30 - 16:00", "Guest Arrival & Welcome Tattoo/Photo Station", "Welcome Greeter", "Entrance", "Kids nametags and welcome drinks"),
-                    ("16:00 - 17:00", "Interactive Games & Entertainer Show", "MC / Magician / Host", "Main Floor", "Age-appropriate group games"),
-                    ("17:00 - 17:30", "Cake Cutting Ceremony & Birthday Songs", "Family & MC", "Stage Area", "Sparkler candles & birthday toast"),
-                    ("17:30 - 18:30", "Buffet Dinner / Snacks & Mingling", "Catering Lead", "Dining Area", "Kid-friendly & adult food stations"),
-                    ("18:30 - 19:30", "Dance Party & Pinata Smash", "DJ / Host", "Dance Area", "High-energy playlist & pinata fun"),
-                    ("19:30 - 20:00", "Return Gifts Handout & Farewell", "Host Family", "Exit Counter", "Personalized favors distribution"),
-                ]
-            else:  # community
-                default_ros = [
-                    ("07:00 - 08:30", "Grounds Setup, Stage & Sound Engineering", "Sound Crew Lead", "Main Grounds", "Power test, microphones, emergency exit verify"),
-                    ("08:30 - 09:30", "Volunteer Briefing & Registration Desk Open", "Volunteer Coordinator", "Registration Canopy", "Distribute badges, lanyards, schedules"),
-                    ("09:30 - 10:15", "Opening Ceremony & Welcome Address", "Community Lead", "Main Stage", "Welcome speech & safety announcement"),
-                    ("10:15 - 13:00", "Main Events, Workshops & Interactive Stalls", "Stage Manager", "Event Zone", "Rotational activities and exhibits"),
-                    ("13:00 - 14:15", "Community Lunch & Refreshment Break", "Food Committee", "Catering Tents", "Organized queue line & waste sorting"),
-                    ("14:15 - 16:30", "Performances, Competitions & Keynote", "Cultural Secretary", "Main Stage", "Community showcases & youth activities"),
-                    ("16:30 - 17:30", "Awards Ceremony & Volunteer Recognition", "Event Chair", "Main Stage", "Felicitation and trophy distribution"),
-                    ("17:30 - 19:00", "Ground Cleandown, Waste Segregation & Security Sign-off", "Safety & Waste Team", "Entire Facility", "Leave ground spotless and return keys"),
-                ]
+        start_time_spec = extract_event_start_time(intake)
 
-            for slot, act, lead, loc, notes in default_ros:
+        # Determine if run_of_show needs regeneration based on structure or timing conflict
+        needs_regeneration = False
+        if not raw_run_of_show or len(raw_run_of_show) < 4:
+            needs_regeneration = True
+        else:
+            # If an event start time is specified (or default wedding evening 19:00),
+            # verify that guest arrival or reception activities do not occur prematurely.
+            s_hr, _ = parse_start_time_hour(start_time_spec, default_hr=19 if intake.event_type == "wedding" else (16 if intake.event_type == "birthday" else 9))
+            for item in raw_run_of_show:
+                act = str(item.get("activity", "")).lower()
+                slot = str(item.get("time_slot", ""))
+                if any(k in act for k in ["guest arrival", "ceremony", "banquet", "reception", "dinner"]):
+                    item_hr, _ = parse_start_time_hour(slot.split("-")[0].strip())
+                    if item_hr < s_hr:
+                        needs_regeneration = True
+                        break
+
+        if needs_regeneration:
+            ros_tuples = build_realistic_run_of_show(intake)
+            for slot, act, lead, loc, notes in ros_tuples:
                 run_of_show_items.append(
                     RunOfShowItem(
                         id=str(uuid.uuid4())[:8],
@@ -426,6 +573,25 @@ class DeterministicRepairEngine:
                         lead_person=lead,
                         location=loc,
                         notes=notes,
+                    )
+                )
+        else:
+            s_hr, _ = parse_start_time_hour(start_time_spec, default_hr=19 if intake.event_type == "wedding" else (16 if intake.event_type == "birthday" else 9))
+            for r in raw_run_of_show:
+                slot = r.get("time_slot", "09:00 - 10:00")
+                act = r.get("activity", "Activity")
+                item_hr, _ = parse_start_time_hour(slot.split("-")[0].strip())
+                # Clearly label operational prep occurring before start time as 'Pre-Event Setup:'
+                if item_hr < s_hr and not act.startswith("Pre-Event Setup:") and any(k in act.lower() for k in ["prep", "setup", "arrival", "soundcheck", "portraits", "briefing"]):
+                    act = f"Pre-Event Setup: {act}"
+                run_of_show_items.append(
+                    RunOfShowItem(
+                        id=r.get("id") or str(uuid.uuid4())[:8],
+                        time_slot=slot,
+                        activity=act,
+                        lead_person=r.get("lead_person", "Coordinator"),
+                        location=r.get("location", "Main Venue"),
+                        notes=r.get("notes", ""),
                     )
                 )
 
@@ -818,6 +984,7 @@ class DeterministicRepairEngine:
         raw_plan: Optional[Dict[str, Any]],
         intake: EventIntake,
         existing_event_id: Optional[str] = None,
+        preserve_categories_only: bool = False,
     ) -> FullEventPlan:
         """
         Master deterministic post-processing layer:
@@ -830,11 +997,15 @@ class DeterministicRepairEngine:
         raw_vendors = raw_plan.get("vendors", []) if raw_plan else []
         raw_ideas = raw_plan.get("ideas", {}) if raw_plan else {}
 
+        raw_items = raw_budget.get("items") if isinstance(raw_budget, dict) else None
+        should_preserve = preserve_categories_only or (existing_event_id is not None and raw_items is not None and len(raw_items) > 0)
+
         # 1. Repair Budget
         budget_summary = cls.repair_budget(
-            raw_items=raw_budget.get("items") if isinstance(raw_budget, dict) else None,
+            raw_items=raw_items,
             intake=intake,
             contingency_pct=float(raw_budget.get("contingency_percentage", 8.0)) if isinstance(raw_budget, dict) else 8.0,
+            preserve_categories_only=should_preserve,
         )
 
         # 2. Repair Timeline

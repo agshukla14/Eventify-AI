@@ -249,7 +249,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-16 font-sans">
       {/* 1. Header Banner */}
-      <div className="bg-gradient-to-r from-sky-700 via-teal-700 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <div className="bg-gradient-to-r from-sky-700 via-indigo-700 to-slate-900 rounded-2xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold mb-3">
             <CloudSun className="w-4 h-4 text-amber-300" />
@@ -287,7 +287,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
               value={cityInput}
               onChange={(e) => setCityInput(e.target.value)}
               placeholder="Celebration Location / City (e.g. Jaipur, Mumbai, Goa)"
-              className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:bg-white transition"
+              className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
               required
             />
           </div>
@@ -298,7 +298,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
               type="date"
               value={dateInput}
               onChange={(e) => setDateInput(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:bg-white transition font-medium"
+              className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition font-medium"
               required
             />
           </div>
@@ -306,7 +306,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
           <button
             type="submit"
             disabled={isLoading}
-            className="px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 shrink-0"
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 shrink-0"
           >
             {isLoading ? (
               <>
@@ -341,7 +341,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
 
       {isLoading && (
         <div className="flex flex-col items-center justify-center h-64 space-y-3 bg-white rounded-2xl border border-slate-200">
-          <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
           <p className="text-xs font-semibold text-slate-500">Querying Open-Meteo Meteorological System...</p>
         </div>
       )}
@@ -461,9 +461,9 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-slate-400">
                 <span className="text-[10px] font-bold uppercase tracking-wider">Humidity</span>
-                <Droplets className="w-4 h-4 text-teal-500" />
+                <Droplets className="w-4 h-4 text-indigo-500" />
               </div>
-              <p className="text-lg font-extrabold text-teal-700 mt-2">
+              <p className="text-lg font-extrabold text-indigo-700 mt-2">
                 {weatherData.day_summary.humidity_mean.toFixed(0)}%
               </p>
               <span className="text-[10px] text-slate-500 mt-1">Relative moisture</span>
@@ -658,7 +658,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
                 <button
                   onClick={() => setIsConfirmModalOpen(true)}
                   disabled={selectedRecommendations.length === 0 || !plan}
-                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition disabled:opacity-50"
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition disabled:opacity-50"
                 >
                   <ListPlus className="w-4 h-4" />
                   <span>Save to Timeline ({selectedRecommendations.length})</span>
@@ -675,7 +675,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
                     onClick={() => handleToggleRecommendation(rec.title)}
                     className={`p-4 rounded-xl border transition cursor-pointer flex flex-col justify-between space-y-3 ${
                       isSelected
-                        ? 'border-teal-500 bg-teal-50/40 shadow-xs'
+                        ? 'border-indigo-500 bg-indigo-50/40 shadow-xs'
                         : 'border-slate-200 hover:border-slate-300 bg-white'
                     }`}
                   >
@@ -697,7 +697,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => {}}
-                          className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500 cursor-pointer"
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 cursor-pointer"
                         />
                       </div>
 
@@ -713,7 +713,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
                     </div>
 
                     <div className="pt-2.5 border-t border-slate-100 space-y-1">
-                      <p className="text-[11px] font-semibold text-teal-900 bg-teal-100/60 p-2 rounded-lg">
+                      <p className="text-[11px] font-semibold text-indigo-900 bg-indigo-100/60 p-2 rounded-lg">
                         🎯 Action: {rec.action_item}
                       </p>
                       <span className="text-[10px] text-slate-400 block text-right font-medium">
@@ -827,7 +827,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
                     <ul className="space-y-1">
                       {aiAnswer.key_suggestions.map((s, idx) => (
                         <li key={idx} className="text-xs text-slate-600 flex items-start gap-1.5">
-                          <Check className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                          <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
                           <span>{s}</span>
                         </li>
                       ))}
@@ -850,7 +850,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <ListPlus className="w-5 h-5 text-teal-600" />
+                <ListPlus className="w-5 h-5 text-indigo-600" />
                 <h3 className="font-extrabold text-slate-900 text-base">
                   Confirm Timeline Integration
                 </h3>
@@ -868,7 +868,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
               <ul className="space-y-1.5 text-xs text-slate-800">
                 {selectedRecommendations.map((t, idx) => (
                   <li key={idx} className="flex items-start gap-1.5 font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
                     <span>{t}</span>
                   </li>
                 ))}
@@ -887,7 +887,7 @@ export const WeatherPlannerTab: React.FC<WeatherPlannerTabProps> = ({ plan, onRe
                 type="button"
                 onClick={handleSaveToTimeline}
                 disabled={isSavingTasks}
-                className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-sm disabled:opacity-50"
               >
                 {isSavingTasks ? (
                   <>

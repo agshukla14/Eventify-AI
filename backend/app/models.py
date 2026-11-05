@@ -11,6 +11,8 @@ class UserModel(Base):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(150), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
+    email_verified = Column(Boolean, nullable=False, default=True)
+    email_verified_at = Column(String(40), nullable=True)
     created_at = Column(String(40), nullable=False)
     updated_at = Column(String(40), nullable=False)
 

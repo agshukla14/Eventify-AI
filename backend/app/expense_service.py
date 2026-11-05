@@ -1,6 +1,8 @@
 import json
+import logging
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import List, Optional, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -15,6 +17,27 @@ from .schemas import (
     ExpenseTrackingSummary,
     FullEventPlan,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def categories_match(cat1: str, cat2: str) -> bool:
+    """Matches category names taking into account canonical category taxonomy."""
+    c1 = (cat1 or "").strip().lower()
+    c2 = (cat2 or "").strip().lower()
+    if not c1 or not c2:
+        return False
+    if c1 == c2:
+        return True
+    try:
+        from .budget_optimizer import map_category_to_canonical
+        canon1, _, _ = map_category_to_canonical(c1)
+        canon2, _, _ = map_category_to_canonical(c2)
+        if canon1 and canon2 and canon1.lower() == canon2.lower():
+            return True
+    except Exception:
+        pass
+    return False
 
 
 class ExpenseService:
@@ -31,35 +54,46 @@ class ExpenseService:
             return
 
         expenses = self.db.query(ExpenseModel).filter(ExpenseModel.event_id == event_record.id).all()
-        category_spending: Dict[str, float] = {}
-        total_spent = 0.0
-
-        for exp in expenses:
-            cat_norm = exp.category.strip().lower()
-            category_spending[cat_norm] = category_spending.get(cat_norm, 0.0) + exp.amount
-            total_spent += exp.amount
 
         try:
             plan_data = json.loads(event_record.plan_json)
             budget = plan_data.get("budget", {})
             items = budget.get("items", [])
 
-            for item in items:
-                cat_norm = item.get("category", "").strip().lower()
-                matched_spent = category_spending.get(cat_norm, 0.0)
-                item["actual_spent"] = round(matched_spent, 2)
+            # Reset each item's actual_spent
+            item_spents = {i.get("id", i.get("category")): Decimal("0.00") for i in items}
 
-            budget["total_actual_spent"] = round(total_spent, 2)
-            total_budget = budget.get("total_budget", event_record.total_budget)
+            # Map each expense to the most specific budget item (exact match first, then canonical)
+            for exp in expenses:
+                exp_cat = (exp.category or "").strip().lower()
+                amt = Decimal(str(exp.amount or 0.0))
+
+                # 1. Exact match
+                matched_item = next((i for i in items if i.get("category", "").strip().lower() == exp_cat), None)
+                if not matched_item:
+                    # 2. Canonical match
+                    matched_item = next((i for i in items if categories_match(exp.category, i.get("category", ""))), None)
+
+                if matched_item:
+                    key = matched_item.get("id", matched_item.get("category"))
+                    item_spents[key] = item_spents.get(key, Decimal("0.00")) + amt
+
+            for item in items:
+                key = item.get("id", item.get("category"))
+                item["actual_spent"] = float(round(item_spents.get(key, Decimal("0.00")), 2))
+
+            total_spent = sum((Decimal(str(exp.amount or 0.0)) for exp in expenses), Decimal("0.00"))
+            budget["total_actual_spent"] = float(round(total_spent, 2))
+            total_budget = Decimal(str(budget.get("total_budget", event_record.total_budget)))
             budget["is_over_budget"] = total_spent > total_budget
-            budget["over_budget_amount"] = max(0.0, round(total_spent - total_budget, 2))
+            budget["over_budget_amount"] = float(max(Decimal("0.00"), round(total_spent - total_budget, 2)))
 
             event_record.plan_json = json.dumps(plan_data)
             event_record.updated_at = datetime.utcnow().isoformat()
             self.db.commit()
             self.db.refresh(event_record)
         except Exception as e:
-            print(f"Error syncing actual spent to plan: {e}")
+            logger.error(f"Error syncing actual spent to plan: {e}")
 
     def create_expense(self, event_id: str, expense_in: ExpenseCreate) -> ExpenseResponse:
         event = self.db.query(EventModel).filter(EventModel.id == event_id).first()
@@ -253,6 +287,105 @@ class ExpenseService:
 
         return True
 
+    def adjust_budget_spent(
+        self,
+        event_id: str,
+        category: str,
+        target_spent: float,
+        notes: Optional[str] = None,
+    ) -> FullEventPlan:
+        """
+        Adjusts actual spending for a category in Budget Planner by creating
+        or modifying auditable ExpenseModel ledger records in SQLite.
+        Guarantees single source of truth between Budget Planner and Expense Tracking.
+        """
+        event = self.db.query(EventModel).filter(EventModel.id == event_id).first()
+        if not event:
+            raise ValueError(f"Event '{event_id}' not found")
+
+        expenses = self.db.query(ExpenseModel).filter(ExpenseModel.event_id == event_id).all()
+
+        has_exact = any((exp.category or "").strip().lower() == category.strip().lower() for exp in expenses)
+        current_spent = Decimal("0.00")
+        for exp in expenses:
+            is_match = (
+                (exp.category or "").strip().lower() == category.strip().lower()
+                if has_exact
+                else categories_match(exp.category, category)
+            )
+            if is_match:
+                current_spent += Decimal(str(exp.amount or 0.0))
+
+        target_d = Decimal(str(max(0.0, target_spent or 0.0))).quantize(Decimal("0.01"))
+        delta = target_d - current_spent
+
+        if delta > Decimal("0.00"):
+            now_iso = datetime.utcnow().isoformat()
+            today_str = datetime.utcnow().strftime("%Y-%m-%d")
+            adj_id = f"exp_adj_{uuid.uuid4().hex[:10]}"
+            adj_exp = ExpenseModel(
+                id=adj_id,
+                event_id=event_id,
+                expense_name=f"Manual Adjustment - {category}",
+                category=category,
+                amount=float(delta),
+                expense_date=today_str,
+                payment_status="Paid",
+                payment_method="Direct Entry / Manual Adjustment",
+                notes=notes or f"Auditable manual spending adjustment entered via Budget Planner for {category}.",
+                created_at=now_iso,
+                updated_at=now_iso,
+            )
+            self.db.add(adj_exp)
+            self.db.commit()
+        elif delta < Decimal("0.00"):
+            needed_reduction = abs(delta)
+            matching_adjs = [
+                e for e in expenses
+                if (
+                    ((e.category or "").strip().lower() == category.strip().lower())
+                    if has_exact
+                    else categories_match(e.category, category)
+                ) and "adjustment" in e.expense_name.lower()
+            ]
+            for adj in matching_adjs:
+                adj_amt = Decimal(str(adj.amount))
+                if adj_amt <= needed_reduction:
+                    needed_reduction -= adj_amt
+                    self.db.delete(adj)
+                else:
+                    adj.amount = float(adj_amt - needed_reduction)
+                    adj.updated_at = datetime.utcnow().isoformat()
+                    needed_reduction = Decimal("0.00")
+                    break
+
+            if needed_reduction > Decimal("0.00"):
+                remaining_matching = [
+                    e for e in expenses
+                    if (
+                        ((e.category or "").strip().lower() == category.strip().lower())
+                        if has_exact
+                        else categories_match(e.category, category)
+                    ) and e not in matching_adjs
+                ]
+                if remaining_matching:
+                    remaining_matching.sort(key=lambda x: x.created_at or "", reverse=True)
+                    for exp in remaining_matching:
+                        e_amt = Decimal(str(exp.amount))
+                        if e_amt <= needed_reduction:
+                            needed_reduction -= e_amt
+                            self.db.delete(exp)
+                        else:
+                            exp.amount = float(e_amt - needed_reduction)
+                            exp.updated_at = datetime.utcnow().isoformat()
+                            needed_reduction = Decimal("0.00")
+                            break
+            self.db.commit()
+
+        self._sync_plan_actual_spent(event)
+        plan_data = json.loads(event.plan_json)
+        return FullEventPlan(**plan_data)
+
     def get_expense_summary(self, event_id: str) -> ExpenseTrackingSummary:
         event = self.db.query(EventModel).filter(EventModel.id == event_id).first()
         if not event:
@@ -280,18 +413,19 @@ class ExpenseService:
             else:
                 pending_count += 1
 
-        # Planned allocations from event budget (which includes Phase 1 optimizations if applied)
+        # Planned allocations from event budget
         planned_items = plan.budget.items
         categories_comparison: List[CategoryExpenseComparison] = []
-        seen_categories = set()
+        seen_expense_cats = set()
 
         for item in planned_items:
             cat_name = item.category
-            norm_cat = cat_name.strip().lower()
-            seen_categories.add(norm_cat)
+            matched_expenses = [e for e in expenses if categories_match(e.category, cat_name)]
+            actual = round(sum(e.amount for e in matched_expenses), 2)
+            for e in matched_expenses:
+                seen_expense_cats.add(e.category.strip().lower())
 
             planned = round(item.allocated_amount, 2)
-            actual = round(cat_actual_map.get(norm_cat, 0.0), 2)
             diff = round(planned - actual, 2)
             rem = max(0.0, diff)
             is_over = actual > planned
@@ -311,22 +445,22 @@ class ExpenseService:
                 )
             )
 
-        # Check if there are any expenses logged in categories not originally in planned items
-        for norm_cat, actual in cat_actual_map.items():
-            if norm_cat not in seen_categories:
-                # Find original casing from first matching expense
-                first_exp = next((e for e in expenses if e.category.strip().lower() == norm_cat), None)
-                cat_name = first_exp.category if first_exp else norm_cat.title()
-                diff = -actual
+        # Check if there are any expenses logged in categories not matching planned items
+        for exp in expenses:
+            exp_norm = exp.category.strip().lower()
+            if exp_norm not in seen_expense_cats:
+                seen_expense_cats.add(exp_norm)
+                other_matching = [e for e in expenses if e.category.strip().lower() == exp_norm]
+                unmatched_spent = round(sum(e.amount for e in other_matching), 2)
                 categories_comparison.append(
                     CategoryExpenseComparison(
-                        category=cat_name,
+                        category=exp.category,
                         planned_budget=0.0,
-                        actual_spent=round(actual, 2),
+                        actual_spent=unmatched_spent,
                         remaining=0.0,
-                        difference=diff,
+                        difference=-unmatched_spent,
                         is_overspent=True,
-                        overspent_amount=round(actual, 2),
+                        overspent_amount=unmatched_spent,
                         utilization_percentage=100.0,
                     )
                 )

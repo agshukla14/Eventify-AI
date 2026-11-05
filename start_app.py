@@ -92,7 +92,7 @@ def ensure_seed_data():
 
 def main():
     print("=" * 66)
-    print("Celebration & Event Planner Assistant (FastAPI + React UI)")
+    print("EVENTIFY – Intelligent AI-Powered Event Planning Platform")
     print("=" * 66)
 
     # 1. Check frontend build

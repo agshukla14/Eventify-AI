@@ -83,7 +83,7 @@ const RSVP_COLORS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Family: '#0d9488',
+  Family: '#4f46e5',
   Friends: '#0284c7',
   Relatives: '#8b5cf6',
   Colleagues: '#ec4899',
@@ -358,7 +358,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
       .map(([cat, count]) => ({
         category: cat,
         count,
-        fill: CATEGORY_COLORS[cat] || '#0d9488',
+        fill: CATEGORY_COLORS[cat] || '#4f46e5',
       }))
       .filter(c => c.count > 0);
   }, [summary]);
@@ -366,7 +366,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
   const invitationPieData = useMemo(() => {
     if (!summary) return [];
     return [
-      { name: 'Sent', value: summary.total_invitations_sent, color: '#0d9488' },
+      { name: 'Sent', value: summary.total_invitations_sent, color: '#4f46e5' },
       { name: 'Not Sent', value: summary.total_invitations_pending, color: '#94a3b8' },
     ].filter(d => d.value > 0);
   }, [summary]);
@@ -396,9 +396,9 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
       <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-teal-600" />
+            <Users className="w-5 h-5 text-indigo-600" />
             <h3 className="text-base font-bold text-slate-900">Guest Management & RSVP Ledger</h3>
-            <span className="px-2.5 py-0.5 text-2xs font-bold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200 rounded-full">
+            <span className="px-2.5 py-0.5 text-2xs font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">
               Live Tracker
             </span>
           </div>
@@ -417,7 +417,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
             }}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl transition-all shadow-2xs"
           >
-            <Upload className="w-3.5 h-3.5 text-teal-600" />
+            <Upload className="w-3.5 h-3.5 text-indigo-600" />
             <span>Import CSV</span>
           </button>
 
@@ -443,16 +443,16 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   href={getExportGuestsCsvUrl(plan.event_id, 'All')}
                   download
                   onClick={() => setShowExportMenu(false)}
-                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-teal-50 hover:text-teal-900 transition-colors"
+                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 transition-colors"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-teal-600" />
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />
                   <span>All Guests (CSV)</span>
                 </a>
                 <a
                   href={getExportGuestsCsvUrl(plan.event_id, 'Accepted')}
                   download
                   onClick={() => setShowExportMenu(false)}
-                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-teal-50 hover:text-teal-900 transition-colors"
+                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 transition-colors"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Accepted Guests (CSV)</span>
@@ -461,7 +461,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   href={getExportGuestsCsvUrl(plan.event_id, 'Pending')}
                   download
                   onClick={() => setShowExportMenu(false)}
-                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-teal-50 hover:text-teal-900 transition-colors"
+                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 transition-colors"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600" />
                   <span>Pending Guests (CSV)</span>
@@ -470,7 +470,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   href={getExportGuestsCsvUrl(plan.event_id, 'Declined')}
                   download
                   onClick={() => setShowExportMenu(false)}
-                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-teal-50 hover:text-teal-900 transition-colors"
+                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 transition-colors"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-rose-600" />
                   <span>Declined Guests (CSV)</span>
@@ -484,7 +484,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => setShowExportMenu(false)}
-                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-teal-50 hover:text-teal-900 transition-colors"
+                  className="flex items-center gap-2 px-3.5 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 transition-colors"
                 >
                   <FileText className="w-3.5 h-3.5 text-rose-600" />
                   <span>Complete Guest Report (PDF)</span>
@@ -496,7 +496,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
           {/* Add Guest Button */}
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 rounded-xl shadow-sm transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 rounded-xl shadow-sm transition-all"
           >
             <UserPlus className="w-4 h-4" />
             <span>Add New Guest</span>
@@ -578,7 +578,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
         <div className="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <PieIcon className="w-4 h-4 text-teal-600" />
+              <PieIcon className="w-4 h-4 text-indigo-600" />
               <span>RSVP Response Distribution</span>
             </h4>
           </div>
@@ -648,7 +648,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
         <div className="lg:col-span-3 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
           <div>
             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Send className="w-4 h-4 text-teal-600" />
+              <Send className="w-4 h-4 text-indigo-600" />
               <span>Invitation Pacing</span>
             </h4>
             <p className="text-2xs text-slate-400">Sent vs Not Sent progress</p>
@@ -658,13 +658,13 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
             <div>
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="font-semibold text-slate-700">Invitations Dispatched</span>
-                <span className="font-bold text-teal-700">
+                <span className="font-bold text-indigo-700">
                   {summary?.total_invitations_sent || 0} / {summary?.total_guests_invited || 0}
                 </span>
               </div>
               <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                 <div
-                  className="h-2 rounded-full bg-teal-600 transition-all duration-500"
+                  className="h-2 rounded-full bg-indigo-600 transition-all duration-500"
                   style={{
                     width: `${
                       summary && summary.total_guests_invited > 0
@@ -689,7 +689,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
               </div>
               <div className="flex items-center justify-between border-t border-slate-200/60 pt-1.5">
                 <span className="text-slate-500">Attendance Pacing:</span>
-                <span className="font-extrabold text-teal-800">
+                <span className="font-extrabold text-indigo-800">
                   {plan.intake.guest_count > 0 && summary
                     ? ((summary.total_expected_attendance / plan.intake.guest_count) * 100).toFixed(1)
                     : 0}
@@ -727,7 +727,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                 placeholder="Search guest, email, phone..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 w-44 sm:w-56"
+                className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 w-44 sm:w-56"
               />
             </div>
 
@@ -735,7 +735,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
             <select
               value={selectedCategory}
               onChange={e => setSelectedCategory(e.target.value)}
-              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-700"
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
             >
               <option value="all">All Categories</option>
               {CATEGORIES.map(c => (
@@ -749,7 +749,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
             <select
               value={selectedRSVP}
               onChange={e => setSelectedRSVP(e.target.value)}
-              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-700"
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
             >
               <option value="all">All RSVP Statuses</option>
               <option value="Accepted">Accepted</option>
@@ -761,7 +761,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
             <select
               value={selectedInvitation}
               onChange={e => setSelectedInvitation(e.target.value)}
-              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-700"
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
             >
               <option value="all">All Invitations</option>
               <option value="Sent">Sent</option>
@@ -772,7 +772,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as any)}
-              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-700"
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
             >
               <option value="name_asc">Name: A to Z</option>
               <option value="name_desc">Name: Z to A</option>
@@ -856,7 +856,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                         title="Click to toggle invitation sent status"
                         className={`px-2.5 py-1 text-2xs font-bold rounded-lg border transition-all ${
                           guest.invitation_status === 'Sent'
-                            ? 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100'
+                            ? 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
                             : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                         }`}
                       >
@@ -873,7 +873,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                             rsvp_status: e.target.value as RSVPStatus,
                           })
                         }
-                        className={`px-2.5 py-1 text-2xs font-bold rounded-lg border focus:outline-none focus:ring-1 focus:ring-teal-500 cursor-pointer ${
+                        className={`px-2.5 py-1 text-2xs font-bold rounded-lg border focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer ${
                           guest.rsvp_status === 'Accepted'
                             ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                             : guest.rsvp_status === 'Declined'
@@ -893,7 +893,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                         <button
                           onClick={() => handleOpenEditModal(guest)}
                           title="Edit Guest Details"
-                          className="p-1 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -914,7 +914,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                     <p className="text-xs font-medium">No guests found matching current search or filters.</p>
                     <button
                       onClick={handleOpenAddModal}
-                      className="mt-2 text-xs font-semibold text-teal-600 hover:underline inline-flex items-center gap-1"
+                      className="mt-2 text-xs font-semibold text-indigo-600 hover:underline inline-flex items-center gap-1"
                     >
                       <UserPlus className="w-3.5 h-3.5" /> Add new guest
                     </button>
@@ -935,7 +935,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
 
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-teal-600" />
+                <Users className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-base font-bold text-slate-900">
                   {editingGuest ? 'Edit Guest Information' : 'Add New Guest'}
                 </h3>
@@ -968,7 +968,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   placeholder="e.g. Rahul Sharma"
                   value={formData.full_name}
                   onChange={e => setFormData({ ...formData, full_name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900 font-medium"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-medium"
                 />
               </div>
 
@@ -981,7 +981,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   <select
                     value={formData.category}
                     onChange={e => setFormData({ ...formData, category: e.target.value as GuestCategory })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   >
                     {CATEGORIES.map(c => (
                       <option key={c} value={c}>
@@ -1001,7 +1001,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                     max="20"
                     value={formData.plus_ones}
                     onChange={e => setFormData({ ...formData, plus_ones: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   />
                 </div>
               </div>
@@ -1017,7 +1017,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                     placeholder="name@example.com"
                     value={formData.email || ''}
                     onChange={e => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   />
                 </div>
 
@@ -1030,7 +1030,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                     placeholder="+91-9876543210"
                     value={formData.phone || ''}
                     onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   />
                 </div>
               </div>
@@ -1046,7 +1046,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                     onChange={e =>
                       setFormData({ ...formData, invitation_status: e.target.value as InvitationStatus })
                     }
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   >
                     <option value="Not Sent">Not Sent</option>
                     <option value="Sent">Sent</option>
@@ -1060,7 +1060,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   <select
                     value={formData.rsvp_status}
                     onChange={e => setFormData({ ...formData, rsvp_status: e.target.value as RSVPStatus })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   >
                     <option value="Pending">Pending</option>
                     <option value="Accepted">Accepted</option>
@@ -1079,7 +1079,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   placeholder="e.g. Jain vegetarian, Nut allergy, Wheelchair ramp needed"
                   value={formData.special_requirements || ''}
                   onChange={e => setFormData({ ...formData, special_requirements: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                 />
               </div>
 
@@ -1093,7 +1093,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   placeholder="Table arrangement, family side, seating preference..."
                   value={formData.notes || ''}
                   onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                 />
               </div>
 
@@ -1109,7 +1109,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 active:scale-95 disabled:opacity-50 rounded-xl shadow-sm transition-all"
+                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 rounded-xl shadow-sm transition-all"
                 >
                   <Check className="w-4 h-4" />
                   <span>{editingGuest ? 'Save Changes' : 'Save Guest Record'}</span>
@@ -1130,7 +1130,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
 
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-teal-600" />
+                <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-base font-bold text-slate-900">Import Guest List from CSV</h3>
               </div>
               <button
@@ -1142,10 +1142,10 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
             </div>
 
             {/* File Upload Box */}
-            <div className="p-4 border-2 border-dashed border-teal-200 rounded-xl bg-teal-50/30 text-center space-y-2 flex-shrink-0">
-              <Upload className="w-7 h-7 text-teal-600 mx-auto" />
+            <div className="p-4 border-2 border-dashed border-indigo-200 rounded-xl bg-indigo-50/30 text-center space-y-2 flex-shrink-0">
+              <Upload className="w-7 h-7 text-indigo-600 mx-auto" />
               <div>
-                <label className="text-xs font-bold text-teal-900 cursor-pointer hover:underline">
+                <label className="text-xs font-bold text-indigo-900 cursor-pointer hover:underline">
                   Choose a CSV file
                   <input
                     type="file"
@@ -1159,7 +1159,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                 </span>
               </div>
               {importFile && (
-                <span className="inline-block px-2.5 py-0.5 text-2xs font-semibold bg-white text-teal-800 border border-teal-200 rounded-md">
+                <span className="inline-block px-2.5 py-0.5 text-2xs font-semibold bg-white text-indigo-800 border border-indigo-200 rounded-md">
                   📄 {importFile.name} ({(importFile.size / 1024).toFixed(1)} KB)
                 </span>
               )}
@@ -1257,7 +1257,7 @@ export const GuestsTab: React.FC<GuestsTabProps> = ({ plan }) => {
                   type="button"
                   onClick={handleConfirmCSVImport}
                   disabled={!importPreview || importPreview.valid_rows_count === 0 || isImporting}
-                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-xl shadow-sm transition-all"
+                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl shadow-sm transition-all"
                 >
                   <Check className="w-4 h-4" />
                   <span>

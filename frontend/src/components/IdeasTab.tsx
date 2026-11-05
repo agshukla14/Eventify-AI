@@ -28,7 +28,7 @@ export const IdeasTab: React.FC<IdeasTabProps> = ({ plan }) => {
     <div key={item.id} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-shadow">
       <div>
         <div className="flex items-center justify-between gap-2 mb-2">
-          <span className="text-2xs font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200/50">
+          <span className="text-2xs font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200/50">
             {catLabel}
           </span>
           <div className="flex flex-wrap gap-1">
@@ -98,7 +98,7 @@ export const IdeasTab: React.FC<IdeasTabProps> = ({ plan }) => {
               onClick={() => setActiveCategory(c.id)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                 isActive
-                  ? 'bg-teal-600 text-white shadow-sm shadow-teal-500/20'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
                   : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
               }`}
             >

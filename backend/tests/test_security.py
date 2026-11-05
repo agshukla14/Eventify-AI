@@ -3,7 +3,7 @@ import pytest
 from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 from backend.app.main import app
-from backend.app.auth_service import get_jwt_secret, create_access_token
+from backend.app.auth_service import get_jwt_secret, create_access_token, _DEV_FALLBACK_SECRET
 
 client = TestClient(app)
 
@@ -22,8 +22,10 @@ def auth_users():
         "full_name": "User Alpha"
     })
     assert res_a.status_code == 200, res_a.text
-    token_a = res_a.json()["access_token"]
-    user_a_id = res_a.json()["user"]["id"]
+    user_a_id = res_a.json()["user_id"]
+    login_a = client.post("/api/auth/login", json={"email": user_a_email, "password": password})
+    assert login_a.status_code == 200
+    token_a = login_a.json()["access_token"]
 
     res_b = client.post("/api/auth/register", json={
         "email": user_b_email,
@@ -31,8 +33,10 @@ def auth_users():
         "full_name": "User Beta"
     })
     assert res_b.status_code == 200, res_b.text
-    token_b = res_b.json()["access_token"]
-    user_b_id = res_b.json()["user"]["id"]
+    user_b_id = res_b.json()["user_id"]
+    login_b = client.post("/api/auth/login", json={"email": user_b_email, "password": password})
+    assert login_b.status_code == 200
+    token_b = login_b.json()["access_token"]
 
     return {
         "user_a": {"id": user_a_id, "token": token_a, "headers": {"Authorization": f"Bearer {token_a}"}},
@@ -372,3 +376,57 @@ def test_12_disallowed_cors_origins():
     # The Access-Control-Allow-Origin header must either be absent or NOT equal to attacker's origin
     allowed_origin = res.headers.get("access-control-allow-origin")
     assert allowed_origin != attacker_origin, f"Disallowed origin was incorrectly permitted: {allowed_origin}"
+
+
+def test_13_production_mode_auth_enforcement_and_bearer_token(monkeypatch, auth_users):
+    """
+    Scenario 13: In production mode (APP_ENV=production):
+    - GET /api/events without credentials MUST return 401 'Authentication required. Please sign in to access this resource.'
+    - GET /api/events WITH Bearer token MUST succeed with 200.
+    """
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("JWT_SECRET", _DEV_FALLBACK_SECRET)
+
+    # 1. Without credentials -> 401
+    res_no_auth = client.get("/api/events")
+    assert res_no_auth.status_code == 401
+    assert res_no_auth.json()["detail"] == "Authentication required. Please sign in to access this resource."
+
+    # 2. With valid Bearer token -> 200
+    headers_a = auth_users["user_a"]["headers"]
+    res_auth = client.get("/api/events", headers=headers_a)
+    assert res_auth.status_code == 200
+    assert isinstance(res_auth.json(), list)
+
+
+def test_14_export_downloads_with_query_param_token(monkeypatch, auth_users, user_b_resources):
+    """
+    Scenario 14: File export downloads in production mode (APP_ENV=production):
+    - Normal browser navigation to export URLs without headers but with ?token=<jwt> must succeed.
+    - Missing token in production mode must return 401.
+    - Invalid token in ?token=<jwt> must return 401.
+    """
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("JWT_SECRET", _DEV_FALLBACK_SECRET)
+    event_id = user_b_resources["event_id"]
+    token_b = auth_users["user_b"]["token"]
+
+    # 1. Export with valid query param token -> 200
+    csv_res = client.get(f"/api/events/{event_id}/export/csv?token={token_b}")
+    assert csv_res.status_code == 200
+    assert "text/csv" in csv_res.headers.get("content-type", "")
+
+    pdf_res = client.get(f"/api/events/{event_id}/export/pdf?token={token_b}")
+    assert pdf_res.status_code == 200
+    assert "application/pdf" in pdf_res.headers.get("content-type", "")
+
+    # 2. Export without token in production -> 401
+    unauth_res = client.get(f"/api/events/{event_id}/export/csv")
+    assert unauth_res.status_code == 401
+    assert unauth_res.json()["detail"] == "Authentication required. Please sign in to access this resource."
+
+    # 3. Export with invalid token -> 401
+    bad_token_res = client.get(f"/api/events/{event_id}/export/csv?token=invalid.jwt.token")
+    assert bad_token_res.status_code == 401
+    assert "invalid or expired" in bad_token_res.json()["detail"].lower()
+

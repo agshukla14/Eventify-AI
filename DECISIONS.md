@@ -1,6 +1,6 @@
-# DECISIONS.md: Celebration & Event Planner
+# DECISIONS.md: Eventify AI Architecture & Engineering Decisions
 
-This document records the architectural and engineering decisions, sensible defaults, and trade-offs made during the development of the GenAI Celebration & Event Planner Assistant.
+This document records the architectural and engineering decisions, sensible defaults, and trade-offs made during the development of Eventify AI.
 
 ---
 

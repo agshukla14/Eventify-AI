@@ -18,10 +18,8 @@ def test_auth_registration_and_login_flow():
     )
     assert reg_res.status_code == 200, reg_res.text
     reg_data = reg_res.json()
-    assert "access_token" in reg_data
-    assert reg_data["user"]["email"] == test_email
-    assert reg_data["user"]["full_name"] == test_name
-    token = reg_data["access_token"]
+    assert reg_data["email"] == test_email
+    assert reg_data["email_verified"] is True
 
     # 2. Prevent duplicate email registration
     dup_res = client.post(
@@ -46,7 +44,8 @@ def test_auth_registration_and_login_flow():
     assert login_res.status_code == 200
     login_data = login_res.json()
     assert "access_token" in login_data
-    assert login_data["user"]["id"] == reg_data["user"]["id"]
+    token = login_data["access_token"]
+    assert login_data["user"]["id"] == reg_data["user_id"]
 
     # 5. Profile check with Bearer token
     me_res = client.get(

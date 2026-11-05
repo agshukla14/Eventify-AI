@@ -1,8 +1,46 @@
+import json
 import pytest
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 from backend.app.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def fallback_or_mock_gemini_if_exhausted(monkeypatch):
+    """
+    Auto-detects live Gemini 429 quota exhaustion (500 requests/day exceeded on free tier)
+    and mocks recommendations so calculations and constraints can be tested deterministically.
+    """
+    try:
+        import google.genai.models as genai_models
+        real_generate = genai_models.Models.generate_content
+
+        def safe_generate_content(self, *args, **kwargs):
+            try:
+                return real_generate(self, *args, **kwargs)
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+                    fake_res = MagicMock()
+                    fake_res.text = json.dumps({
+                        "revised_total_budget": 0.0,
+                        "category_recommendations": [
+                            {"category": "Venue & Accommodation", "weight": 30.0, "reason": "Preserved core venue."},
+                            {"category": "Catering & Beverages", "weight": 25.0, "reason": "Streamlined menu."},
+                            {"category": "Contingency", "weight": 8.0, "reason": "Maintained buffer."}
+                        ],
+                        "where_money_saved": ["Balanced vendor allocations"],
+                        "why_recommended": "Optimized budget preserving key event elements",
+                        "expenses_preserved": ["Venue & Accommodation"]
+                    })
+                    return fake_res
+                raise
+
+        monkeypatch.setattr(genai_models.Models, "generate_content", safe_generate_content)
+    except Exception:
+        pass
 
 
 def test_expense_crud_and_summary_flow():
@@ -105,7 +143,8 @@ def test_expense_crud_and_summary_flow():
         # Check category-wise comparison
         venue_comp = next(c for c in s2["categories"] if c["category"] == venue_cat)
         assert venue_comp["actual_spent"] == 100000.0
-        assert venue_comp["remaining"] == venue_comp["planned_budget"] - 100000.0
+        assert venue_comp["remaining"] == max(0.0, round(venue_comp["planned_budget"] - 100000.0, 2))
+        assert venue_comp["difference"] == round(venue_comp["planned_budget"] - 100000.0, 2)
 
         # 10. Edit an expense (update amount from 25000 to 30000 and status to Paid)
         edit_res = client.put(

@@ -17,6 +17,10 @@ class EventIntake(BaseModel):
     dietary_preferences: List[str] = Field(default_factory=list, description="Dietary requirements")
     must_haves: List[str] = Field(default_factory=list, description="User must-have elements")
     age_group_details: Optional[str] = Field(None, max_length=200, description="Age group or special occasion info")
+    start_time: Optional[str] = Field(None, max_length=50, description="Event start time e.g. '7:00 PM onwards' or '19:00'")
+    event_time: Optional[str] = Field(None, max_length=50, description="Alias for start_time")
+    venue: Optional[str] = Field(None, max_length=150, description="Venue name e.g. Grand Hyatt Ballroom")
+    host_names: Optional[str] = Field(None, max_length=150, description="Host or family names e.g. The Sharma Family")
 
 
 class BudgetItem(BaseModel):
@@ -29,6 +33,9 @@ class BudgetItem(BaseModel):
     is_contingency: bool = False
     is_mandatory: bool = False
     notes: str = ""
+    canonical_category: Optional[str] = None
+    classification: Optional[Literal["essential", "important", "optional", "custom"]] = "important"
+    is_protected: bool = False
 
 
 class BudgetSummary(BaseModel):
@@ -161,6 +168,46 @@ class ChatResponse(BaseModel):
     tools_executed: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class CategoryMergeSuggestion(BaseModel):
+    source_category_ids: List[str] = Field(default_factory=list)
+    source_categories: List[str] = Field(default_factory=list)
+    canonical_category: str
+    combined_allocation: float
+    combined_percentage: float = 0.0
+    combined_spent: float = 0.0
+    rationale: str
+    confidence: float = 1.0
+
+
+class DuplicateCategoryWarning(BaseModel):
+    warning_type: str  # "exact_duplicate", "similar_category", "overlapping_domain", "duplicate_amount"
+    severity: Literal["warning", "info"] = "warning"
+    message: str
+    affected_categories: List[str] = Field(default_factory=list)
+    suggested_merge: Optional[CategoryMergeSuggestion] = None
+
+
+class CategoryTaxonomyAnalysis(BaseModel):
+    event_id: str
+    standard_categories: List[str]
+    items_analysis: List[Dict[str, Any]]
+    duplicate_warnings: List[DuplicateCategoryWarning] = Field(default_factory=list)
+    merge_suggestions: List[CategoryMergeSuggestion] = Field(default_factory=list)
+    minimum_protected_budget: float
+    total_budget: float
+    currency: str
+
+
+class NormalizeCategoriesRequest(BaseModel):
+    approved_canonical_merges: Optional[List[str]] = None
+    update_classifications: bool = True
+
+
+class UpdateCategoryProtectionRequest(BaseModel):
+    is_protected: Optional[bool] = None
+    classification: Optional[Literal["essential", "important", "optional", "custom"]] = None
+
+
 class BudgetAnalysis(BaseModel):
     total_budget: float
     total_allocated: float
@@ -171,10 +218,16 @@ class BudgetAnalysis(BaseModel):
     highest_expense_percentage: float
     potential_savings_categories: List[str]
     category_distribution: List[Dict[str, Any]]
+    duplicate_warnings: List[DuplicateCategoryWarning] = Field(default_factory=list)
+    merge_suggestions: List[CategoryMergeSuggestion] = Field(default_factory=list)
+    standard_taxonomy: List[str] = Field(default_factory=list)
+    minimum_protected_budget: float = 0.0
+    protected_categories_count: int = 0
 
 
 class BudgetOptimizationRequest(BaseModel):
     user_prompt: str = Field(..., min_length=2, max_length=1000)
+    protected_categories: Optional[List[str]] = Field(default_factory=list)
 
 
 class CategoryOptimization(BaseModel):
@@ -186,6 +239,9 @@ class CategoryOptimization(BaseModel):
     savings: float
     percentage_change: float
     notes: str = ""
+    classification: Optional[Literal["essential", "important", "optional", "custom"]] = "important"
+    is_protected: bool = False
+    canonical_category: Optional[str] = None
 
 
 class OptimizationExplanation(BaseModel):
@@ -198,14 +254,21 @@ class OptimizationExplanation(BaseModel):
 class BudgetOptimizationResponse(BaseModel):
     event_id: str
     user_prompt: str
-    engine_used: str  # "gemini" or "fallback_rule_engine"
+    engine_used: str  # "gemini", "fallback_rule_engine", "deterministic_validation", "error"
     original_total_budget: float
     revised_total_budget: float
     total_savings: float
+    savings_percentage: float = 0.0
+    is_feasible: bool = True
+    is_valid: bool = True
+    validation_errors: List[str] = Field(default_factory=list)
     currency: str
     categories: List[CategoryOptimization]
     explanation: OptimizationExplanation
     optimized_budget_summary: BudgetSummary
+    minimum_protected_budget: float = 0.0
+    protected_categories: List[str] = Field(default_factory=list)
+    duplicate_warnings: List[DuplicateCategoryWarning] = Field(default_factory=list)
 
 
 # =========================================================
@@ -225,6 +288,12 @@ class ExpenseBase(BaseModel):
 
 class ExpenseCreate(ExpenseBase):
     pass
+
+
+class BudgetSpentAdjustRequest(BaseModel):
+    category: str = Field(..., min_length=1, max_length=100)
+    target_spent: float = Field(..., ge=0.0)
+    notes: Optional[str] = Field(None, max_length=500)
 
 
 class ExpenseUpdate(BaseModel):
@@ -780,6 +849,17 @@ class UserRegisterRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=150, description="Valid user email address")
     password: str = Field(..., min_length=6, description="User password (min 6 characters)")
     full_name: str = Field(..., min_length=2, max_length=150, description="Full display name")
+    terms_accepted: bool = Field(True, description="Acceptance of terms and conditions")
+
+
+class UserRegisterResponse(BaseModel):
+    message: str
+    email: str
+    user_id: str
+    email_verified: bool = True
+    access_token: Optional[str] = None
+    token_type: Optional[str] = "bearer"
+    user: Optional["UserResponse"] = None
 
 
 class UserLoginRequest(BaseModel):
@@ -792,6 +872,8 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     is_active: bool
+    email_verified: bool = True
+    email_verified_at: Optional[str] = None
     created_at: str
 
 

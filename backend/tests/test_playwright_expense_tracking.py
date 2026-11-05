@@ -5,6 +5,8 @@ import uvicorn
 from playwright.sync_api import sync_playwright
 from backend.app.main import app
 
+pytestmark = pytest.mark.playwright
+
 TEST_HOST = "127.0.0.1"
 TEST_PORT = 8895
 

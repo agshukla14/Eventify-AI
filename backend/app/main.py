@@ -1,4 +1,7 @@
 import os
+import json
+from decimal import Decimal
+from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, Response, Request, Query, status
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -9,7 +12,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 import io
 
-from .database import engine, Base, get_db, SessionLocal
+from .database import engine, Base, get_db, SessionLocal, init_db_schema_and_migrations
 from .schemas import (
     EventIntake,
     FullEventPlan,
@@ -59,7 +62,13 @@ from .schemas import (
     WeatherAssistantResponse,
     SaveTimelineMitigationsRequest,
     SaveTimelineMitigationsResponse,
+    BudgetItem,
+    CategoryTaxonomyAnalysis,
+    NormalizeCategoriesRequest,
+    BudgetSpentAdjustRequest,
+    UpdateCategoryProtectionRequest,
     UserRegisterRequest,
+    UserRegisterResponse,
     UserLoginRequest,
     UserResponse,
     TokenResponse,
@@ -77,10 +86,23 @@ from .plan_service import PlanService
 from .chat_service import ChatService
 from .export_service import ExportService
 from .gemini_client import GeminiClient
-from .budget_optimizer import analyze_budget, SmartBudgetOptimizer
+from .budget_optimizer import (
+    analyze_budget,
+    SmartBudgetOptimizer,
+    STANDARD_CATEGORIES,
+    map_category_to_canonical,
+    detect_duplicate_and_overlapping_categories,
+    normalize_budget_categories,
+    to_decimal,
+)
 from .expense_service import ExpenseService
 from .guest_service import GuestService
-from .invitation_service import InvitationService, BUILTIN_TEMPLATES
+from .invitation_service import (
+    InvitationService,
+    BUILTIN_TEMPLATES,
+    resolve_event_venue,
+    resolve_event_time,
+)
 from .vendor_service import VendorService
 from .weather_service import WeatherService
 from .auth_service import (
@@ -114,6 +136,10 @@ if APP_ENV != "production":
             pass
 
     _ensure_schema_migrations()
+    try:
+        init_db_schema_and_migrations()
+    except Exception:
+        pass
 
 # Seed verified vendor directory if empty
 try:
@@ -200,7 +226,7 @@ def health_check():
 # Authentication & User Management Endpoints
 # =============================================================
 
-@app.post("/api/auth/register", response_model=TokenResponse)
+@app.post("/api/auth/register", response_model=UserRegisterResponse)
 def register_user(req: UserRegisterRequest, db: Session = Depends(get_db)):
     auth = AuthService(db)
     return auth.register(req)
@@ -222,8 +248,15 @@ def get_current_user_profile(
         email=user.email,
         full_name=user.full_name,
         is_active=user.is_active,
+        email_verified=user.email_verified,
+        email_verified_at=user.email_verified_at,
         created_at=user.created_at,
     )
+
+
+@app.post("/api/auth/logout")
+def logout_user():
+    return {"message": "Logged out successfully."}
 
 
 # =============================================================
@@ -317,7 +350,173 @@ def optimize_event_budget(
     if not plan:
         raise HTTPException(status_code=404, detail="Event not found")
     optimizer = SmartBudgetOptimizer()
-    return optimizer.optimize(plan, req.user_prompt)
+    return optimizer.optimize(plan, req.user_prompt, req.protected_categories)
+
+
+@app.get("/api/events/{event_id}/category-analysis", response_model=CategoryTaxonomyAnalysis)
+def get_category_analysis(
+    event_id: str,
+    user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    verify_event_ownership(event_id, user, db)
+    plan_service = PlanService(db)
+    plan = plan_service.get_plan(event_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    warnings, suggestions = detect_duplicate_and_overlapping_categories(plan.budget.items, plan.budget.currency)
+    items_analysis = []
+    for it in plan.budget.items:
+        mapped, conf, is_comp = map_category_to_canonical(it.category)
+        items_analysis.append({
+            "id": it.id,
+            "category": it.category,
+            "canonical_category": mapped,
+            "is_compound": is_comp,
+            "confidence": conf,
+            "classification": it.classification or "important",
+            "is_protected": it.is_protected or it.is_contingency,
+            "allocated_amount": it.allocated_amount,
+            "percentage": it.percentage,
+        })
+    min_protected = sum(to_decimal(i.allocated_amount) for i in plan.budget.items if i.is_protected or i.is_contingency)
+    return CategoryTaxonomyAnalysis(
+        event_id=event_id,
+        standard_categories=STANDARD_CATEGORIES,
+        items_analysis=items_analysis,
+        duplicate_warnings=warnings,
+        merge_suggestions=suggestions,
+        minimum_protected_budget=float(min_protected),
+        total_budget=plan.budget.total_budget,
+        currency=plan.budget.currency,
+    )
+
+
+@app.post("/api/events/{event_id}/normalize-categories", response_model=FullEventPlan)
+def normalize_event_categories(
+    event_id: str,
+    req: NormalizeCategoriesRequest,
+    user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    verify_event_ownership(event_id, user, db)
+    record = db.query(EventModel).filter(EventModel.id == event_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    try:
+        plan_data = json.loads(record.plan_json)
+        plan = FullEventPlan(**plan_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse event plan: {str(e)}")
+
+    normalized_items, rename_map = normalize_budget_categories(
+        items=plan.budget.items,
+        total_budget=plan.budget.total_budget,
+        approved_canonical_merges=req.approved_canonical_merges,
+        currency=plan.budget.currency,
+        return_rename_map=True,
+    )
+
+    try:
+        # 1. Update ExpenseModel records in SQLite in atomic transaction
+        if rename_map:
+            expenses = db.query(ExpenseModel).filter(ExpenseModel.event_id == event_id).all()
+            for exp in expenses:
+                exp_cat_norm = exp.category.strip().lower()
+                if exp_cat_norm in rename_map:
+                    exp.category = rename_map[exp_cat_norm]
+                    exp.updated_at = datetime.utcnow().isoformat()
+
+        # 2. Sync actual_spent from SQLite expenses table if expenses exist
+        expenses = db.query(ExpenseModel).filter(ExpenseModel.event_id == event_id).all()
+        if expenses:
+            cat_spent: Dict[str, float] = {}
+            total_spent = Decimal("0.00")
+            for exp in expenses:
+                c_norm = exp.category.strip().lower()
+                amt_d = to_decimal(exp.amount)
+                cat_spent[c_norm] = float(to_decimal(cat_spent.get(c_norm, 0.0)) + amt_d)
+                total_spent += amt_d
+
+            for it in normalized_items:
+                c_norm = it.category.strip().lower()
+                it.actual_spent = round(cat_spent.get(c_norm, 0.0), 2)
+
+            plan.budget.total_actual_spent = float(total_spent)
+            plan.budget.is_over_budget = float(total_spent) > plan.budget.total_budget
+            plan.budget.over_budget_amount = max(0.0, float(total_spent) - plan.budget.total_budget)
+
+        # 3. Update plan budget items
+        plan.budget.items = normalized_items
+        plan.budget.total_allocated = round(sum(i.allocated_amount for i in normalized_items), 2)
+        plan.updated_at = datetime.utcnow().isoformat()
+
+        record.plan_json = json.dumps(plan.model_dump())
+        record.updated_at = plan.updated_at
+
+        db.commit()
+        db.refresh(record)
+        return plan
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Consolidation transaction failed for event {event_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Database consolidation transaction failed: {str(e)}")
+
+
+@app.post("/api/events/{event_id}/budget/adjust-spent", response_model=FullEventPlan)
+def adjust_budget_spent_endpoint(
+    event_id: str,
+    req: BudgetSpentAdjustRequest,
+    user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Adjusts actual spent for a category from Budget Planner, creating or updating
+    auditable ExpenseModel ledger records in SQLite to keep both modules in 100% sync.
+    """
+    verify_event_ownership(event_id, user, db)
+    service = ExpenseService(db)
+    try:
+        return service.adjust_budget_spent(
+            event_id=event_id,
+            category=req.category,
+            target_spent=req.target_spent,
+            notes=req.notes,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to adjust budget spent for {event_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/events/{event_id}/categories/{item_id}", response_model=BudgetItem)
+def update_category_protection(
+    event_id: str,
+    item_id: str,
+    req: UpdateCategoryProtectionRequest,
+    user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    verify_event_ownership(event_id, user, db)
+    plan_service = PlanService(db)
+    plan = plan_service.get_plan(event_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    target_item = next((i for i in plan.budget.items if i.id == item_id), None)
+    if not target_item:
+        raise HTTPException(status_code=404, detail="Category item not found")
+
+    if req.is_protected is not None:
+        target_item.is_protected = req.is_protected
+    if req.classification is not None:
+        target_item.classification = req.classification
+
+    plan_service.update_plan(event_id, plan)
+    return target_item
 
 
 @app.delete("/api/events/{event_id}")
@@ -760,7 +959,7 @@ def generate_invitation_texts(
         if guest:
             verify_event_ownership(guest.event_id, user, db)
 
-    return InvitationService.generate_invitations(req, guest=guest)
+    return InvitationService.generate_invitations(req, guest=guest, db=db)
 
 
 @app.post("/api/events/{event_id}/invitations", response_model=InvitationResponse)
@@ -833,6 +1032,7 @@ def export_invitation_pdf(
         language=req.language,
         components=req.text_components,
         design_config=req.design_config,
+        event_info=req.event_details,
     )
     safe_slug = "".join(c for c in req.title if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_") or "Invitation"
     filename = f"{safe_slug}_Card.pdf"
@@ -855,11 +1055,26 @@ def export_saved_invitation_pdf(
         raise HTTPException(status_code=404, detail="Invitation not found")
     verify_event_ownership(inv.event_id, user, db)
 
+    event = db.query(EventModel).filter(EventModel.id == inv.event_id).first()
+    event_info = None
+    if event:
+        intake_data = json.loads(event.intake_json) if event.intake_json else {}
+        event_info = {
+            "event_name": event.title,
+            "event_type": event.event_type,
+            "event_date": event.date,
+            "event_time": resolve_event_time(db, event.id),
+            "venue": resolve_event_venue(db, event.id, event.city or ""),
+            "location": event.city,
+            "host_names": intake_data.get("host_names") or "The Host Family",
+        }
+
     pdf_bytes = ExportService.generate_invitation_pdf(
         title=inv.title,
         language=inv.language,
         components=inv.text_components,
         design_config=inv.design_config,
+        event_info=event_info,
     )
     safe_slug = "".join(c for c in inv.title if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_") or "Invitation"
     filename = f"{safe_slug}_Card.pdf"

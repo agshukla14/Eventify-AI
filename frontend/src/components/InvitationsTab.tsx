@@ -57,6 +57,87 @@ interface InvitationsTabProps {
   plan: FullEventPlan | null;
 }
 
+export const extractVenueFromPlan = (plan: FullEventPlan | null): string => {
+  if (!plan) return '';
+  // 1. Explicit intake venue
+  if (plan.intake && (plan.intake as any).venue && (plan.intake as any).venue.trim()) {
+    return (plan.intake as any).venue.trim();
+  }
+  // 2. Plan vendors
+  if (plan.vendors && Array.isArray(plan.vendors)) {
+    const venueVendor = plan.vendors.find(
+      (v) =>
+        v.category &&
+        v.category.toLowerCase().includes('venue') &&
+        v.vendor_name &&
+        v.vendor_name.trim() &&
+        !v.vendor_name.toLowerCase().includes('specialist') &&
+        !v.vendor_name.toLowerCase().includes('provider')
+    );
+    if (venueVendor && venueVendor.vendor_name.trim()) {
+      return venueVendor.vendor_name.trim();
+    }
+    const anyVenue = plan.vendors.find(
+      (v) => v.category && v.category.toLowerCase().includes('venue') && v.vendor_name && v.vendor_name.trim()
+    );
+    if (anyVenue && anyVenue.vendor_name.trim()) {
+      return anyVenue.vendor_name.trim();
+    }
+  }
+  // 3. Fallback to city
+  return plan.intake?.city ? `${plan.intake.city} Grand Hall` : 'Grand Celebration Venue';
+};
+
+export const formatTimeWithAmPm = (timeStr: string): string => {
+  if (!timeStr) return '7:00 PM onwards';
+  const t = timeStr.trim();
+  const lower = t.toLowerCase();
+  if (lower.includes('am') || lower.includes('pm')) {
+    return t.includes('onwards') ? t : `${t} onwards`;
+  }
+  const match = t.match(/(\d{1,2}):(\d{2})/);
+  if (match) {
+    const hour = parseInt(match[1], 10);
+    const minute = match[2];
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const dispHour = hour % 12 === 0 ? 12 : hour % 12;
+    return `${dispHour}:${minute} ${period} onwards`;
+  }
+  const numMatch = t.match(/(\d{1,2})/);
+  if (numMatch) {
+    const hour = parseInt(numMatch[1], 10);
+    const period = hour >= 12 && hour < 24 ? 'PM' : (hour < 12 ? 'AM' : 'PM');
+    const dispHour = hour % 12 === 0 ? 12 : hour % 12;
+    return `${dispHour}:00 ${period} onwards`;
+  }
+  return `${t} onwards`;
+};
+
+export const extractStartTimeFromPlan = (plan: FullEventPlan | null): string => {
+  if (!plan) return '7:00 PM onwards';
+  const intakeTime = (plan.intake as any).start_time || (plan.intake as any).event_time;
+  if (intakeTime && String(intakeTime).trim()) {
+    return formatTimeWithAmPm(String(intakeTime).trim());
+  }
+  if (plan.timeline?.run_of_show?.length) {
+    const mainSlot = plan.timeline.run_of_show.find(
+      (r) =>
+        !r.activity.toLowerCase().includes('pre-event setup') &&
+        !r.activity.toLowerCase().includes('vendor arrival')
+    );
+    if (mainSlot && mainSlot.time_slot) {
+      const slotStart = mainSlot.time_slot.split('-')[0].trim();
+      return formatTimeWithAmPm(slotStart);
+    }
+    const firstSlot = plan.timeline.run_of_show[0].time_slot.split('-')[0].trim();
+    return formatTimeWithAmPm(firstSlot);
+  }
+  const evType = (plan.intake?.event_type || '').toLowerCase();
+  if (evType.includes('birthday')) return '3:00 PM onwards';
+  if (evType.includes('community')) return '9:00 AM onwards';
+  return '7:00 PM onwards';
+};
+
 // 7 Professional Built-in Templates
 const TEMPLATE_PRESETS: Record<string, InvitationTemplate> = {
   traditional_indian_wedding: {
@@ -230,16 +311,36 @@ export const InvitationsTab: React.FC<InvitationsTabProps> = ({ plan }) => {
   // Auto-fill from Plan & Load Guests & Saved Invitations
   useEffect(() => {
     if (plan) {
-      setEventName(plan.intake.title || '');
+      const title = plan.intake.title || '';
+      const evDate = plan.intake.date || '';
+      const evCity = plan.intake.city || '';
+      const realVenue = extractVenueFromPlan(plan);
+      const realTime = extractStartTimeFromPlan(plan);
+      const realHosts = plan.intake.host_names || 'The Host Family';
+
+      setEventName(title);
       setEventType(
         plan.intake.event_type
           ? plan.intake.event_type.charAt(0).toUpperCase() + plan.intake.event_type.slice(1)
           : 'Wedding'
       );
-      setEventDate(plan.intake.date || '');
-      setLocation(plan.intake.city || '');
-      setVenue(plan.intake.city ? `${plan.intake.city} Celebration Center` : 'Royal Banquet');
-      setHostNames('The Host Family');
+      setEventDate(evDate);
+      setLocation(evCity);
+      setVenue(realVenue);
+      setEventTime(realTime);
+      setHostNames(realHosts);
+
+      // Auto-populate activeComponents with dynamic event defaults so Live Preview & PDF are never empty
+      const initialDetails = `Date: ${evDate} | Time: ${realTime}\nVenue: ${realVenue}, ${evCity}`;
+      const initialMsg = `Together with our families, ${realHosts} cordially invite you to join us in celebrating '${title}'. Your gracious presence and warm blessings will make this celebration truly special.`;
+      const initialClosing = `With warm regards,\n${realHosts}`;
+      setActiveComponents({
+        personalized_greeting: 'Dear Esteemed Guests & Family,',
+        event_details: initialDetails,
+        invitation_message: initialMsg,
+        closing_message: initialClosing,
+        full_text: `Dear Esteemed Guests & Family,\n\n${initialMsg}\n\n${initialDetails}\n\n${initialClosing}`,
+      });
 
       // Pick default template matching event type
       const lowerType = (plan.intake.event_type || '').toLowerCase();
@@ -413,6 +514,11 @@ export const InvitationsTab: React.FC<InvitationsTabProps> = ({ plan }) => {
   const handleDownloadPng = async () => {
     setIsExportingPng(true);
     try {
+      // Ensure web fonts are completely ready before measuring and drawing
+      if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+
       const canvas = document.createElement('canvas');
       const width = 800;
       const height = 1120;
@@ -425,166 +531,541 @@ export const InvitationsTab: React.FC<InvitationsTabProps> = ({ plan }) => {
       ctx.fillStyle = designConfig.bg_color || '#FFFDF9';
       ctx.fillRect(0, 0, width, height);
 
-      // 2. Borders
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = designConfig.accent_color || '#D97706';
+      // Rounded rect utility helper with backward-compatibility fallback
+      const drawRoundRect = (
+        c: CanvasRenderingContext2D,
+        rx: number,
+        ry: number,
+        rw: number,
+        rh: number,
+        radius: number
+      ) => {
+        if (typeof c.roundRect === 'function') {
+          c.beginPath();
+          c.roundRect(rx, ry, rw, rh, radius);
+        } else {
+          c.beginPath();
+          c.moveTo(rx + radius, ry);
+          c.lineTo(rx + rw - radius, ry);
+          c.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
+          c.lineTo(rx + rw, ry + rh - radius);
+          c.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
+          c.lineTo(rx + radius, ry + rh);
+          c.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
+          c.lineTo(rx, ry + radius);
+          c.quadraticCurveTo(rx, ry, rx + radius, ry);
+          c.closePath();
+        }
+      };
+
+      // 2. Borders & Corner Accents
+      const borderStyle = designConfig.border_style || 'ornate_gold';
+      const primaryColor = designConfig.primary_color || '#991B1B';
+      const accentColor = designConfig.accent_color || '#D97706';
+      const textColor = designConfig.text_color || '#1F2937';
+
+      // Outer Border
+      ctx.save();
+      ctx.lineWidth = borderStyle === 'minimal' ? 1.5 : 2.5;
+      ctx.strokeStyle = borderStyle === 'double' ? primaryColor : accentColor;
       ctx.strokeRect(30, 30, width - 60, height - 60);
 
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = designConfig.primary_color || '#991B1B';
+      // Inner Border
+      if (borderStyle === 'dashed') {
+        ctx.setLineDash([8, 6]);
+      }
+      ctx.lineWidth = borderStyle === 'double' ? 1.5 : 1.2;
+      ctx.strokeStyle = borderStyle === 'double' ? accentColor : primaryColor;
       ctx.strokeRect(40, 40, width - 80, height - 80);
+      ctx.restore();
 
       // Corner Accents
       const corners = [
-        [40, 40],
-        [width - 40, 40],
-        [40, height - 40],
-        [width - 40, height - 40],
+        [40, 40, 1, 1],
+        [width - 40, 40, -1, 1],
+        [40, height - 40, 1, -1],
+        [width - 40, height - 40, -1, -1],
       ];
-      ctx.fillStyle = designConfig.accent_color || '#D97706';
-      corners.forEach(([cx, cy]) => {
+      ctx.fillStyle = accentColor;
+      ctx.strokeStyle = accentColor;
+      ctx.lineWidth = 1.2;
+      corners.forEach(([cx, cy, dirX, dirY]) => {
+        // Corner Dot
         ctx.beginPath();
-        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
         ctx.fill();
+
+        // Elegant corner brackets for ornate/royal/floral
+        if (borderStyle === 'ornate_gold' || borderStyle === 'double' || borderStyle === 'floral') {
+          ctx.beginPath();
+          ctx.moveTo(cx + dirX * 14, cy);
+          ctx.lineTo(cx + dirX * 14, cy + dirY * 14);
+          ctx.lineTo(cx, cy + dirY * 14);
+          ctx.stroke();
+
+          // Small diamond accent inside bracket
+          ctx.beginPath();
+          const dX = cx + dirX * 8;
+          const dY = cy + dirY * 8;
+          ctx.moveTo(dX, dY - 2.5);
+          ctx.lineTo(dX + 2.5, dY);
+          ctx.lineTo(dX, dY + 2.5);
+          ctx.lineTo(dX - 2.5, dY);
+          ctx.closePath();
+          ctx.fill();
+        }
       });
 
-      // 3. Helper to wrap text
-      const drawWrappedText = (
-        text: string,
-        x: number,
-        startY: number,
-        maxWidth: number,
-        lineHeight: number,
-        font: string,
-        color: string
-      ): number => {
-        ctx.font = font;
-        ctx.fillStyle = color;
-        ctx.textAlign = 'center';
-        let currentY = startY;
+      // 3. Typography & Font Resolution with Indic Support
+      const lang = language || 'English';
+      const configFont = designConfig.font_family || 'serif';
 
+      const getTitleFontFamily = () => {
+        if (lang === 'Gujarati') {
+          return '"Noto Sans Gujarati", "Shruti", "Gujarati Sangam MN", "Nirmala UI", sans-serif';
+        }
+        if (lang === 'Hindi') {
+          return '"Noto Sans Devanagari", "Mangal", "Devanagari Sangam MN", "Nirmala UI", sans-serif';
+        }
+        if (configFont === 'sans') {
+          return '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        }
+        if (configFont === 'cursive') {
+          return '"Playfair Display", "Great Vibes", "Georgia", serif';
+        }
+        return '"Cinzel", "Playfair Display", "Times New Roman", Georgia, serif';
+      };
+
+      const getBodyFontFamily = () => {
+        if (lang === 'Gujarati') {
+          return '"Noto Sans Gujarati", "Shruti", "Gujarati Sangam MN", "Nirmala UI", sans-serif';
+        }
+        if (lang === 'Hindi') {
+          return '"Noto Sans Devanagari", "Mangal", "Devanagari Sangam MN", "Nirmala UI", sans-serif';
+        }
+        if (configFont === 'sans') {
+          return '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        }
+        return '"Georgia", "Times New Roman", serif';
+      };
+
+      // 4. Line Wrapping & Measurement Helper (Pass 1)
+      interface MeasuredBlock {
+        type: 'text';
+        lines: string[];
+        lineHeight: number;
+        font: string;
+        color: string;
+        totalHeight: number;
+        isItalic?: boolean;
+      }
+
+      const measureTextBlock = (
+        text: string,
+        maxWidth: number,
+        fontSize: number,
+        lineHeight: number,
+        fontFamily: string,
+        fontWeight: string,
+        color: string,
+        isItalic = false
+      ): MeasuredBlock => {
+        const fontStr = `${isItalic ? 'italic ' : ''}${fontWeight} ${fontSize}px ${fontFamily}`;
+        ctx.font = fontStr;
+        const resultLines: string[] = [];
         const paragraphs = text.split('\n');
-        for (const para of paragraphs) {
+
+        for (let p = 0; p < paragraphs.length; p++) {
+          const para = paragraphs[p];
           if (!para.trim()) {
-            currentY += lineHeight * 0.75;
+            if (p > 0 && p < paragraphs.length - 1) {
+              resultLines.push('');
+            }
             continue;
           }
           const words = para.split(' ');
-          let line = '';
+          let currentLine = '';
           for (let n = 0; n < words.length; n++) {
-            const testLine = line + words[n] + ' ';
+            const testLine = currentLine ? `${currentLine} ${words[n]}` : words[n];
             const metrics = ctx.measureText(testLine);
-            if (metrics.width > maxWidth && n > 0) {
-              ctx.fillText(line.trim(), x, currentY);
-              line = words[n] + ' ';
-              currentY += lineHeight;
+            if (metrics.width > maxWidth && currentLine) {
+              resultLines.push(currentLine.trim());
+              currentLine = words[n];
             } else {
-              line = testLine;
+              currentLine = testLine;
             }
           }
-          ctx.fillText(line.trim(), x, currentY);
-          currentY += lineHeight;
+          if (currentLine) {
+            resultLines.push(currentLine.trim());
+          }
         }
-        return currentY;
+
+        let totalH = 0;
+        for (const l of resultLines) {
+          totalH += l === '' ? lineHeight * 0.5 : lineHeight;
+        }
+
+        return {
+          type: 'text',
+          lines: resultLines,
+          lineHeight,
+          font: fontStr,
+          color,
+          totalHeight: Math.max(totalH, lineHeight),
+          isItalic,
+        };
       };
 
-      let y = 100;
+      // Check for user religious mantra to avoid duplication in PNG export
+      const GANESH_KEYWORDS = ['ગણેશાય નમઃ', 'શ્રી ગણેશ', 'શ્રીગણેશ', 'ગણેશજી', 'गणेशाय नमः', 'श्री गणेश', 'श्रीगणेश', 'ganeshaya namaha'];
+      const userTextHasMantra = GANESH_KEYWORDS.some(k => 
+        (activeComponents.personalized_greeting || '').toLowerCase().includes(k) || 
+        (activeComponents.invitation_message || '').toLowerCase().includes(k)
+      );
 
-      // Decorative Top Motif Text
-      let motif = '❖ ❖ ❖';
+      // Determine Decorative Top Motif Text
+      let motif = '• • •';
       if (designConfig.decorative_element === 'mandala_diya') {
-        motif = language === 'Hindi' ? '॥ श्री गणेशाय नमः ॥' : language === 'Gujarati' ? '॥ શ્રી ગણેશાય નમઃ ॥' : '✦ CORDIAL INVITATION ✦';
+        if (userTextHasMantra) {
+          motif = language === 'Hindi' ? '— ॐ —' : language === 'Gujarati' ? '— ૐ —' : '— • —';
+        } else {
+          motif = language === 'Hindi' ? '॥ ॐ श्री गणेशाय नमः ॥' : language === 'Gujarati' ? '॥ ૐ શ્રી ગણેશાય નમઃ ॥' : '• CORDIAL INVITATION •';
+        }
       } else if (designConfig.decorative_element === 'royal_crest') {
-        motif = '👑 ❖ ROYAL INVITATION ❖ 👑';
+        motif = language === 'Hindi' ? '— शाही निमंत्रण —' : language === 'Gujarati' ? '— રાજવી નિમંત્રણ —' : '— ROYAL INVITATION —';
       } else if (designConfig.decorative_element === 'floral_wreath') {
-        motif = '❀ ❀ CELEBRATION ❀ ❀';
+        motif = language === 'Hindi' ? '— मंगल महोत्सव —' : language === 'Gujarati' ? '— મંગલ મહોત્સવ —' : '— CELEBRATION —';
       } else if (designConfig.decorative_element === 'confetti_stars') {
-        motif = '★ ★ ★ CELEBRATE WITH US ★ ★ ★';
+        motif = language === 'Hindi' ? '— आनंदोत्सव —' : language === 'Gujarati' ? '— આનંદમય ઉજવણી —' : "— LET'S CELEBRATE —";
+      } else if (designConfig.decorative_element === 'geometric_badge') {
+        motif = '— • —';
       }
 
-      ctx.font = 'bold 16px serif';
-      ctx.fillStyle = designConfig.accent_color;
-      ctx.textAlign = 'center';
-      ctx.fillText(motif, width / 2, y);
-      y += 50;
+      // Check text lengths to select standard vs compact sizing
+      const totalCharCount =
+        (eventName || '').length +
+        (activeComponents.personalized_greeting || '').length +
+        (activeComponents.invitation_message || '').length +
+        (activeComponents.event_details || '').length +
+        (activeComponents.closing_message || '').length;
 
-      // Title
-      ctx.font = 'bold 30px "Times New Roman", Georgia, serif';
-      ctx.fillStyle = designConfig.primary_color;
-      y = drawWrappedText(eventName, width / 2, y, width - 160, 40, 'bold 30px serif', designConfig.primary_color) + 20;
+      const isCompact = totalCharCount > 650;
 
-      // Greeting
-      if (activeComponents.personalized_greeting) {
-        y = drawWrappedText(
-          activeComponents.personalized_greeting,
-          width / 2,
-          y,
-          width - 160,
-          28,
-          'italic 20px Georgia, serif',
-          designConfig.primary_color
-        ) + 20;
-      }
+      // Font parameters
+      const titleSize = isCompact ? 28 : (eventName.length > 40 ? 30 : 34);
+      const titleLineH = isCompact ? 36 : 42;
+      const greetingSize = isCompact ? 18 : 21;
+      const greetingLineH = isCompact ? 26 : 30;
+      const messageSize = isCompact ? 16 : 18;
+      const messageLineH = isCompact ? 26 : 30;
+      const closingSize = isCompact ? 17 : 19;
+      const closingLineH = isCompact ? 26 : 29;
 
-      // Invitation Message
-      if (activeComponents.invitation_message) {
-        y = drawWrappedText(
-          activeComponents.invitation_message,
-          width / 2,
-          y,
-          width - 180,
-          26,
-          '17px "Times New Roman", serif',
-          designConfig.text_color
-        ) + 30;
-      }
+      const contentMaxWidth = width - 180; // 620px
 
-      // Event Details Box
-      if (activeComponents.event_details) {
-        const boxX = 80;
-        const boxWidth = width - 160;
-        const boxStartY = y;
-        const boxPadding = 20;
+      // Measure Sections
+      // 1. Top Motif & Decorative Divider
+      const topMotifHeight = 44;
 
-        ctx.font = '16px sans-serif';
-        const lines = activeComponents.event_details.split('\n');
-        const boxHeight = lines.length * 28 + boxPadding * 2 + 10;
+      // 2. Title Block
+      const titleBlock = measureTextBlock(
+        eventName || 'Celebration',
+        contentMaxWidth,
+        titleSize,
+        titleLineH,
+        getTitleFontFamily(),
+        'bold',
+        primaryColor
+      );
 
-        // Box background & border
-        ctx.fillStyle = designConfig.bg_color === '#0F172A' || designConfig.bg_color === '#111827' ? '#1E293B' : '#FFFFFF';
-        ctx.fillRect(boxX, boxStartY, boxWidth, boxHeight);
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = designConfig.accent_color;
-        ctx.strokeRect(boxX, boxStartY, boxWidth, boxHeight);
-
-        // Details title
-        ctx.font = 'bold 13px sans-serif';
-        ctx.fillStyle = designConfig.primary_color;
-        ctx.fillText('— EVENT DETAILS —', width / 2, boxStartY + 25);
-
-        // Details content
-        let detailY = boxStartY + 55;
-        lines.forEach((line) => {
-          ctx.font = '15px sans-serif';
-          ctx.fillStyle = designConfig.text_color;
-          ctx.fillText(line, width / 2, detailY);
-          detailY += 26;
-        });
-
-        y = boxStartY + boxHeight + 35;
-      }
-
-      // Closing Message
-      if (activeComponents.closing_message) {
-        drawWrappedText(
-          activeComponents.closing_message,
-          width / 2,
-          y,
-          width - 160,
-          26,
-          'italic 18px Georgia, serif',
-          designConfig.primary_color
+      // 3. Greeting Block
+      let greetingBlock: MeasuredBlock | null = null;
+      if (activeComponents.personalized_greeting?.trim()) {
+        greetingBlock = measureTextBlock(
+          activeComponents.personalized_greeting.trim(),
+          contentMaxWidth,
+          greetingSize,
+          greetingLineH,
+          getBodyFontFamily(),
+          lang === 'English' ? '500' : 'bold',
+          primaryColor,
+          lang === 'English'
         );
+      }
+
+      // 4. Main Invitation Message Block
+      let messageBlock: MeasuredBlock | null = null;
+      if (activeComponents.invitation_message?.trim()) {
+        messageBlock = measureTextBlock(
+          activeComponents.invitation_message.trim(),
+          contentMaxWidth - 20,
+          messageSize,
+          messageLineH,
+          getBodyFontFamily(),
+          'normal',
+          textColor
+        );
+      }
+
+      // 5. Event Details Card Block
+      interface DetailsCardBlock {
+        type: 'details';
+        boxWidth: number;
+        boxHeight: number;
+        headerTitle: string;
+        lines: string[];
+        lineHeight: number;
+        paddingX: number;
+        paddingY: number;
+      }
+
+      let detailsBlock: DetailsCardBlock | null = null;
+      if (activeComponents.event_details?.trim()) {
+        const detailsHeader =
+          lang === 'Hindi'
+            ? '✦ कार्यक्रम विवरण ✦'
+            : lang === 'Gujarati'
+            ? '✦ કાર્યક્રમ વિગત ✦'
+            : '✦ EVENT DETAILS ✦';
+
+        const rawDetailsLines = activeComponents.event_details.split('\n');
+        const boxWidth = Math.min(contentMaxWidth, 580);
+        const paddingX = 26;
+        const paddingY = isCompact ? 16 : 22;
+        const maxTextW = boxWidth - paddingX * 2;
+        const detLineH = isCompact ? 24 : 27;
+
+        // Wrap each detail line if necessary
+        ctx.font = `15px ${getBodyFontFamily()}`;
+        const wrappedDetailLines: string[] = [];
+        for (const rawLine of rawDetailsLines) {
+          if (!rawLine.trim()) continue;
+          const words = rawLine.split(' ');
+          let cur = '';
+          for (let w = 0; w < words.length; w++) {
+            const test = cur ? `${cur} ${words[w]}` : words[w];
+            if (ctx.measureText(test).width > maxTextW && cur) {
+              wrappedDetailLines.push(cur.trim());
+              cur = words[w];
+            } else {
+              cur = test;
+            }
+          }
+          if (cur) wrappedDetailLines.push(cur.trim());
+        }
+
+        const boxHeight =
+          paddingY * 2 + 22 + (isCompact ? 12 : 16) + wrappedDetailLines.length * detLineH;
+
+        detailsBlock = {
+          type: 'details',
+          boxWidth,
+          boxHeight,
+          headerTitle: detailsHeader,
+          lines: wrappedDetailLines,
+          lineHeight: detLineH,
+          paddingX,
+          paddingY,
+        };
+      }
+
+      // 6. Closing Message Block
+      let closingBlock: MeasuredBlock | null = null;
+      if (activeComponents.closing_message?.trim()) {
+        closingBlock = measureTextBlock(
+          activeComponents.closing_message.trim(),
+          contentMaxWidth,
+          closingSize,
+          closingLineH,
+          getBodyFontFamily(),
+          lang === 'English' ? '600' : 'bold',
+          primaryColor,
+          lang === 'English'
+        );
+      }
+
+      // 7. Bottom Anchor Flourish
+      const bottomOrnamentHeight = 26;
+
+      // Group into active flow elements
+      type FlowElement =
+        | { type: 'motif'; height: number }
+        | { type: 'title'; block: MeasuredBlock; height: number }
+        | { type: 'greeting'; block: MeasuredBlock; height: number }
+        | { type: 'message'; block: MeasuredBlock; height: number }
+        | { type: 'details'; block: DetailsCardBlock; height: number }
+        | { type: 'closing'; block: MeasuredBlock; height: number }
+        | { type: 'ornament'; height: number };
+
+      const flowElements: FlowElement[] = [{ type: 'motif', height: topMotifHeight }];
+      flowElements.push({ type: 'title', block: titleBlock, height: titleBlock.totalHeight });
+      if (greetingBlock) {
+        flowElements.push({ type: 'greeting', block: greetingBlock, height: greetingBlock.totalHeight });
+      }
+      if (messageBlock) {
+        flowElements.push({ type: 'message', block: messageBlock, height: messageBlock.totalHeight });
+      }
+      if (detailsBlock) {
+        flowElements.push({ type: 'details', block: detailsBlock, height: detailsBlock.boxHeight });
+      }
+      if (closingBlock) {
+        flowElements.push({ type: 'closing', block: closingBlock, height: closingBlock.totalHeight });
+      }
+      flowElements.push({ type: 'ornament', height: bottomOrnamentHeight });
+
+      // Pass 2: Vertical Distribution Calculation
+      const topSafeY = 65;
+      const bottomSafeY = 1055;
+      const availableHeight = bottomSafeY - topSafeY; // 990px
+
+      const totalContentHeight = flowElements.reduce((sum, el) => sum + el.height, 0);
+      const numGaps = flowElements.length - 1;
+      const totalSlack = availableHeight - totalContentHeight;
+
+      // Target gap distribution across elements and top/bottom padding
+      const targetGap = totalSlack / (numGaps + 2);
+      const gap = Math.min(Math.max(targetGap, 16), 44);
+
+      // Remaining slack distributed symmetrically to top & bottom buffers
+      const leftoverSlack = totalSlack - (numGaps * gap);
+      const topBuffer = Math.max(26, leftoverSlack / 2);
+      let currentY = topSafeY + topBuffer;
+
+      // Pass 3: Render Elements
+      for (const el of flowElements) {
+        if (el.type === 'motif') {
+          // Top Motif text
+          ctx.font = `bold 16px ${getBodyFontFamily()}`;
+          ctx.fillStyle = accentColor;
+          ctx.textAlign = 'center';
+          ctx.fillText(motif, width / 2, currentY + 16);
+
+          // Subtle ornamental divider under motif
+          const divY = currentY + 34;
+          ctx.beginPath();
+          ctx.strokeStyle = accentColor;
+          ctx.lineWidth = 1;
+          ctx.moveTo(width / 2 - 70, divY);
+          ctx.lineTo(width / 2 - 12, divY);
+          ctx.moveTo(width / 2 + 12, divY);
+          ctx.lineTo(width / 2 + 70, divY);
+          ctx.stroke();
+
+          // Center diamond glyph
+          ctx.beginPath();
+          ctx.fillStyle = accentColor;
+          ctx.moveTo(width / 2, divY - 3.5);
+          ctx.lineTo(width / 2 + 3.5, divY);
+          ctx.lineTo(width / 2, divY + 3.5);
+          ctx.lineTo(width / 2 - 3.5, divY);
+          ctx.closePath();
+          ctx.fill();
+
+          currentY += el.height + gap;
+        } else if (el.type === 'title') {
+          ctx.font = el.block.font;
+          ctx.fillStyle = el.block.color;
+          ctx.textAlign = 'center';
+          let lineY = currentY + el.block.lineHeight * 0.85;
+          for (const line of el.block.lines) {
+            ctx.fillText(line, width / 2, lineY);
+            lineY += el.block.lineHeight;
+          }
+          currentY += el.height + gap;
+        } else if (el.type === 'greeting') {
+          ctx.font = el.block.font;
+          ctx.fillStyle = el.block.color;
+          ctx.textAlign = 'center';
+          let lineY = currentY + el.block.lineHeight * 0.85;
+          for (const line of el.block.lines) {
+            ctx.fillText(line, width / 2, lineY);
+            lineY += el.block.lineHeight;
+          }
+          currentY += el.height + gap;
+        } else if (el.type === 'message') {
+          ctx.font = el.block.font;
+          ctx.fillStyle = el.block.color;
+          ctx.textAlign = 'center';
+          let lineY = currentY + el.block.lineHeight * 0.85;
+          for (const line of el.block.lines) {
+            if (line === '') {
+              lineY += el.block.lineHeight * 0.5;
+            } else {
+              ctx.fillText(line, width / 2, lineY);
+              lineY += el.block.lineHeight;
+            }
+          }
+          currentY += el.height + gap;
+        } else if (el.type === 'details') {
+          const d = el.block;
+          const boxX = (width - d.boxWidth) / 2;
+          const boxY = currentY;
+
+          // Box Card Background & Border
+          const isDarkBg = designConfig.bg_color === '#0F172A' || designConfig.bg_color === '#111827';
+          ctx.fillStyle = isDarkBg ? '#1E293B' : '#FFFFFF';
+          drawRoundRect(ctx, boxX, boxY, d.boxWidth, d.boxHeight, 14);
+          ctx.fill();
+
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = accentColor;
+          ctx.stroke();
+
+          // Details Header Title
+          ctx.font = `bold 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+          ctx.fillStyle = primaryColor;
+          ctx.textAlign = 'center';
+          ctx.fillText(d.headerTitle, width / 2, boxY + d.paddingY + 12);
+
+          // Header underline flourish
+          const lineY = boxY + d.paddingY + 22;
+          ctx.beginPath();
+          ctx.strokeStyle = `${accentColor}80`;
+          ctx.lineWidth = 1;
+          ctx.moveTo(width / 2 - 60, lineY);
+          ctx.lineTo(width / 2 + 60, lineY);
+          ctx.stroke();
+
+          // Detail Lines
+          ctx.font = `15px ${getBodyFontFamily()}`;
+          ctx.fillStyle = textColor;
+          let detY = lineY + (isCompact ? 18 : 22);
+          for (const dLine of d.lines) {
+            ctx.fillText(dLine, width / 2, detY);
+            detY += d.lineHeight;
+          }
+
+          currentY += el.height + gap;
+        } else if (el.type === 'closing') {
+          ctx.font = el.block.font;
+          ctx.fillStyle = el.block.color;
+          ctx.textAlign = 'center';
+          let lineY = currentY + el.block.lineHeight * 0.85;
+          for (const line of el.block.lines) {
+            ctx.fillText(line, width / 2, lineY);
+            lineY += el.block.lineHeight;
+          }
+          currentY += el.height + gap;
+        } else if (el.type === 'ornament') {
+          // Bottom Anchor Ornament
+          const ornY = currentY + 12;
+          ctx.fillStyle = accentColor;
+          ctx.strokeStyle = accentColor;
+          ctx.textAlign = 'center';
+          ctx.font = '14px serif';
+          ctx.fillText('— ❖ —', width / 2, ornY);
+
+          // Subtle side accent lines
+          ctx.beginPath();
+          ctx.lineWidth = 0.8;
+          ctx.moveTo(width / 2 - 80, ornY - 4);
+          ctx.lineTo(width / 2 - 28, ornY - 4);
+          ctx.moveTo(width / 2 + 28, ornY - 4);
+          ctx.lineTo(width / 2 + 80, ornY - 4);
+          ctx.stroke();
+
+          currentY += el.height;
+        }
       }
 
       // Convert to blob and download
@@ -613,7 +1094,17 @@ export const InvitationsTab: React.FC<InvitationsTabProps> = ({ plan }) => {
         eventName || 'Celebration Invitation',
         language,
         activeComponents,
-        designConfig
+        designConfig,
+        {
+          event_name: eventName,
+          event_type: eventType,
+          event_date: eventDate,
+          event_time: eventTime,
+          venue: venue,
+          location: location,
+          host_names: hostNames,
+          additional_notes: additionalNotes,
+        }
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -708,7 +1199,17 @@ export const InvitationsTab: React.FC<InvitationsTabProps> = ({ plan }) => {
     const elem = designConfig.decorative_element;
     const accent = designConfig.accent_color;
 
+    const GANESH_KEYWORDS = ['ગણેશાય નમઃ', 'શ્રી ગણેશ', 'શ્રીગણેશ', 'ગણેશજી', 'गणेशाय नमः', 'श्री गणेश', 'श्रीगणेश', 'ganeshaya namaha'];
+    const userTextHasMantra = GANESH_KEYWORDS.some(k => 
+      (activeComponents.personalized_greeting || '').toLowerCase().includes(k) || 
+      (activeComponents.invitation_message || '').toLowerCase().includes(k)
+    );
+
     if (elem === 'mandala_diya') {
+      const motifLabel = userTextHasMantra
+        ? (language === 'Hindi' ? '— ॐ —' : language === 'Gujarati' ? '— ૐ —' : '— • —')
+        : (language === 'Hindi' ? '॥ ॐ श्री गणेशाय नमः ॥' : language === 'Gujarati' ? '॥ ૐ શ્રી ગણેશાય નમઃ ॥' : '✦ CORDIAL INVITATION ✦');
+
       return (
         <div className="flex flex-col items-center justify-center my-2 space-y-1">
           <svg className="w-10 h-10" viewBox="0 0 100 100" fill="none">
@@ -719,34 +1220,37 @@ export const InvitationsTab: React.FC<InvitationsTabProps> = ({ plan }) => {
             <circle cx="50" cy="50" r="4" fill={accent} />
           </svg>
           <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: accent }}>
-            {language === 'Hindi' ? '॥ श्री गणेशाय नमः ॥' : language === 'Gujarati' ? '॥ શ્રી ગણેશાય નમઃ ॥' : '✦ CELEBRATION ✦'}
+            {motifLabel}
           </span>
         </div>
       );
     } else if (elem === 'royal_crest') {
+      const motifLabel = language === 'Hindi' ? '— शाही निमंत्रण —' : language === 'Gujarati' ? '— રાજવી નિમંત્રણ —' : '— ROYAL INVITATION —';
       return (
         <div className="flex flex-col items-center justify-center my-2 space-y-1">
           <Crown className="w-9 h-9" style={{ color: accent }} />
           <span className="text-xs font-bold tracking-widest uppercase" style={{ color: accent }}>
-            ❖ ROYAL INVITATION ❖
+            {motifLabel}
           </span>
         </div>
       );
     } else if (elem === 'floral_wreath') {
+      const motifLabel = language === 'Hindi' ? '— मंगल महोत्सव —' : language === 'Gujarati' ? '— મંગલ મહોત્સવ —' : '— CELEBRATION —';
       return (
         <div className="flex flex-col items-center justify-center my-2 space-y-1">
           <Flower2 className="w-9 h-9" style={{ color: accent }} />
           <span className="text-xs font-serif tracking-widest uppercase" style={{ color: accent }}>
-            ❀ CELEBRATE WITH US ❀
+            {motifLabel}
           </span>
         </div>
       );
     } else if (elem === 'confetti_stars') {
+      const motifLabel = language === 'Hindi' ? '— आनंदोत्सव —' : language === 'Gujarati' ? '— આનંદમય ઉજવણી —' : "— LET'S CELEBRATE —";
       return (
         <div className="flex flex-col items-center justify-center my-2 space-y-1">
           <PartyPopper className="w-9 h-9" style={{ color: accent }} />
           <span className="text-xs font-sans font-bold tracking-widest uppercase" style={{ color: accent }}>
-            ★ ★ ★ YOU ARE INVITED ★ ★ ★
+            {motifLabel}
           </span>
         </div>
       );
@@ -757,7 +1261,7 @@ export const InvitationsTab: React.FC<InvitationsTabProps> = ({ plan }) => {
             <div className="w-3 h-3" style={{ backgroundColor: accent }} />
           </div>
           <span className="text-xs font-mono tracking-widest uppercase" style={{ color: accent }}>
-            [ SPECIAL EVENT ]
+            — • —
           </span>
         </div>
       );

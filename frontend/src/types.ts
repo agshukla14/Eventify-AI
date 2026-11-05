@@ -13,7 +13,13 @@ export interface EventIntake {
   dietary_preferences: string[];
   must_haves: string[];
   age_group_details?: string;
+  start_time?: string;
+  event_time?: string;
+  venue?: string;
+  host_names?: string;
 }
+
+export type ExpenseClassification = 'essential' | 'important' | 'optional' | 'custom';
 
 export interface BudgetItem {
   id: string;
@@ -25,6 +31,9 @@ export interface BudgetItem {
   is_contingency: boolean;
   is_mandatory: boolean;
   notes: string;
+  canonical_category?: string;
+  classification?: ExpenseClassification;
+  is_protected?: boolean;
 }
 
 export interface BudgetSummary {
@@ -160,6 +169,25 @@ export interface CategoryDistributionItem {
   is_contingency: boolean;
 }
 
+export interface CategoryMergeSuggestion {
+  source_category_ids: string[];
+  source_categories: string[];
+  canonical_category: string;
+  combined_allocation: number;
+  combined_percentage: number;
+  combined_spent: number;
+  rationale: string;
+  confidence: number;
+}
+
+export interface DuplicateCategoryWarning {
+  warning_type: string;
+  severity: 'warning' | 'info';
+  message: string;
+  affected_categories: string[];
+  suggested_merge?: CategoryMergeSuggestion;
+}
+
 export interface BudgetAnalysis {
   total_budget: number;
   total_allocated: number;
@@ -170,6 +198,11 @@ export interface BudgetAnalysis {
   highest_expense_percentage: number;
   potential_savings_categories: string[];
   category_distribution: CategoryDistributionItem[];
+  duplicate_warnings?: DuplicateCategoryWarning[];
+  merge_suggestions?: CategoryMergeSuggestion[];
+  standard_taxonomy?: string[];
+  minimum_protected_budget?: number;
+  protected_categories_count?: number;
 }
 
 export interface CategoryOptimization {
@@ -181,6 +214,9 @@ export interface CategoryOptimization {
   savings: number;
   percentage_change: number;
   notes: string;
+  classification?: ExpenseClassification;
+  is_protected?: boolean;
+  canonical_category?: string;
 }
 
 export interface OptimizationExplanation {
@@ -193,14 +229,21 @@ export interface OptimizationExplanation {
 export interface BudgetOptimizationResponse {
   event_id: string;
   user_prompt: string;
-  engine_used: 'gemini' | 'fallback_rule_engine' | string;
+  engine_used: 'gemini' | 'fallback_rule_engine' | 'deterministic_validation' | 'error' | string;
   original_total_budget: number;
   revised_total_budget: number;
   total_savings: number;
+  savings_percentage?: number;
+  is_feasible?: boolean;
+  is_valid?: boolean;
+  validation_errors?: string[];
   currency: string;
   categories: CategoryOptimization[];
   explanation: OptimizationExplanation;
   optimized_budget_summary: BudgetSummary;
+  minimum_protected_budget?: number;
+  protected_categories?: string[];
+  duplicate_warnings?: DuplicateCategoryWarning[];
 }
 
 // =========================================================
@@ -703,6 +746,8 @@ export interface User {
   email: string;
   full_name: string;
   is_active: boolean;
+  email_verified: boolean;
+  email_verified_at?: string | null;
   created_at: string;
 }
 
@@ -721,6 +766,17 @@ export interface RegisterRequest {
   email: string;
   password: string;
   full_name: string;
+  terms_accepted?: boolean;
+}
+
+export interface RegisterResponse {
+  message: string;
+  email: string;
+  user_id: string;
+  email_verified: boolean;
+  access_token?: string;
+  token_type?: string;
+  user?: User;
 }
 
 // =========================================================

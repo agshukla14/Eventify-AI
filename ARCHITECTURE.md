@@ -1,138 +1,203 @@
-# ARCHITECTURE.md: Celebration & Event Planner Assistant
+# ARCHITECTURE.md: Eventify AI Architectural Specification
 
-An autonomous, full-stack GenAI planning platform engineered with deterministic post-processing repair layers, structured Gemini JSON outputs, SQLite persistence, and an interactive React frontend.
+An autonomous, full-stack event intelligence and orchestration SaaS platform engineered with deterministic mathematical repair engines, structured Google Gemini JSON outputs, multi-tenant database isolation, and an interactive React frontend.
 
 ---
 
-## 1. High-Level Architecture Diagram
+## 1. High-Level Architecture Overview
 
 ```mermaid
 graph TD
-    subgraph Client ["Frontend (React 18 + Vite + TypeScript + Tailwind)"]
-        UI[User Interface & Dashboard]
-        IntakeUI[Event Intake Wizard & Presets]
-        BudgetUI[Interactive Budget Planner & Charts]
-        TimelineUI[Adaptive Milestone & Run-of-Show]
-        VendorUI[Vendor Checklist & Contract Tracker]
-        IdeasUI[Personalized Ideas & Swaps]
-        ChatDrawer[AI Assistant Grounded Chat]
+    subgraph Client ["Client Presentation Tier (React 18 + Vite + TypeScript)"]
+        LandingView[Public Landing Page]
+        AuthViews[Login & Register Pages]
+        ExecCenter[Executive SaaS Command Center]
+        BudgetView[Smart Budget Optimizer & Charts]
+        ExpenseView[Expense Tracking Ledger]
+        GuestView[Guest Management & CSV Preview]
+        VendorView[Vendor Discovery & Comparison Matrix]
+        WeatherView[Meteorological Risk Radar]
+        InviteView[Trilingual Invitation Studio]
+        TimelineView[Adaptive Milestone Timeline]
+        AssistantDrawer[Grounded AI Assistant Drawer]
     end
 
-    subgraph API ["Backend (FastAPI + Python 3.11)"]
+    subgraph Security ["Security & Gateway Layer"]
+        CORS[CORS Guard & Domain Whitelist]
+        AuthGuard[JWT Authenticator & Event Ownership Validator]
+        ExceptionBoundary[Global Exception & Error Boundary]
+    end
+
+    subgraph API ["Application API Routing Tier (FastAPI)"]
         Router[FastAPI Application Router]
-        PlanSvc[Plan Service]
-        ChatSvc[Chat & Tool Service]
-        ExportSvc[Export Service ReportLab / CSV]
     end
 
-    subgraph GenAI ["GenAI & Generation Pipeline"]
+    subgraph CoreServices ["Business Logic & Service Layer"]
+        AuthSvc[Auth & Security Service]
+        ExecSvc[Executive KPI Aggregator]
+        PlanSvc[Plan Orchestration Service]
+        BudgetOpt[Smart Budget Optimizer]
+        ExpenseSvc[Expense Ledger & Reconciler]
+        GuestSvc[Guest & RSVP Manager]
+        VendorSvc[Vendor Discovery & Contracting]
+        WeatherSvc[Open-Meteo Meteorological Service]
+        InviteSvc[Invitation & Font Embedding Engine]
+        ChatSvc[Grounded AI Assistant & Tool Dispatcher]
+        ExportSvc[ReportLab PDF & CSV Exporter]
+    end
+
+    subgraph Intelligence ["AI & Fallback Layer"]
         GeminiClient[Google Gemini API gemini-2.5-flash]
-        RetryLoop[Retry Loop with Error Feedback max 3x]
-        FallbackEngine[Deterministic Template Engine Offline Mode]
+        RetryLoop[3x Feedback Error Correction Loop]
+        FallbackEngine[Offline Deterministic Template Engine]
     end
 
-    subgraph Guardrails ["Deterministic Repair & Guard Engine"]
-        Normalizer[Budget Normalizer 100% exact & Contingency]
+    subgraph Guardrails ["Deterministic Invariant Enforcement"]
+        BudgetNormalizer[Budget Normalizer 100.00% & Contingency Floor]
         TimelineClamper[Timeline Clamper & Sprint Compressor]
         VendorInjector[Mandatory Vendor Coverage & Checklists]
-        DietGuard[Dietary & Age Constraint Guard]
+        DietGuard[Dietary & Age Safety Guard]
     end
 
-    subgraph Persistence ["Storage"]
+    subgraph Persistence ["Relational Data Tier"]
+        DBEngine[SQLAlchemy 2.0 ORM Engine]
         SQLite[(SQLite celebration_planner.db)]
+        PostgreSQL[(Render Managed PostgreSQL)]
+        Alembic[Alembic Migration Engine]
     end
 
-    UI -->|HTTP / JSON / REST| Router
-    Router --> PlanSvc
-    Router --> ChatSvc
-    Router --> ExportSvc
+    Client -->|HTTP / REST / Bearer Token| Security
+    Security --> Router
+    Router --> CoreServices
+
+    CoreServices --> DBEngine
+    DBEngine --> SQLite
+    DBEngine --> PostgreSQL
+    Alembic --> DBEngine
 
     PlanSvc --> GeminiClient
-    GeminiClient -->|Validation Error| RetryLoop
-    RetryLoop -->|On Exhaustion| FallbackEngine
+    GeminiClient -->|Validation Failure| RetryLoop
+    RetryLoop -->|Exhaustion / Quota Limit| FallbackEngine
 
     GeminiClient --> Guardrails
     FallbackEngine --> Guardrails
+    Guardrails --> PlanSvc
 
-    Guardrails --> Normalizer
-    Guardrails --> TimelineClamper
-    Guardrails --> VendorInjector
-    Guardrails --> DietGuard
-
-    Guardrails -->|Guaranteed Invariants| PlanSvc
+    BudgetOpt --> PlanSvc
+    ExpenseSvc --> PlanSvc
+    VendorSvc --> ExpenseSvc
     ChatSvc --> Guardrails
-    PlanSvc --> SQLite
-    ChatSvc --> SQLite
 ```
 
 ---
 
 ## 2. Core Subsystems
 
-### A. Intake & Invariant Validation (`EventIntake`)
-- Captures event type (`wedding`, `birthday`, `community`), target date, city, guest count, total budget, currency, theme, cultural traditions, dietary constraints, must-haves, and age group details.
-- Validated via Pydantic v2 schemas.
+### A. Authentication, Security & Data Isolation (`backend/app/auth_service.py` & `core/security.py`)
+- **Token Mechanism**: Standard RFC 7519 HMAC-SHA256 JWT tokens with a default 7-day validity period.
+- **Password Hashing**: NIST-compliant PBKDF2-HMAC-SHA256 with 100,000 hash iterations and unique per-user cryptographically random 16-byte hex salts.
+- **IDOR Protection (`verify_event_ownership`)**: Every private API route verifies that the target `event_id` exists and is owned by the authenticated `user_id`. Cross-user access attempts to events, expenses, guests, or vendor contracts return HTTP 403 Forbidden.
+- **CORS Configuration**: Dynamic, environment-driven origin validation preventing unauthorized cross-origin requests while disallowing wildcard `*` with credentials.
 
-### B. GenAI Integration & Retry Loop (`GeminiClient`)
-- Communicates with Google Gemini API (`gemini-2.5-flash`) via `google-genai`.
-- Enforces structured JSON output matching domain schemas.
-- If JSON decoding or Pydantic validation fails, feeds the exact error back to Gemini in a retry prompt (up to 3 attempts).
-- Automatically routes to `FallbackTemplateEngine` if offline, without API key, or upon retry exhaustion.
+### B. Plan Intake & Invariant Validation (`backend/app/plan_service.py`)
+- Ingests event parameters: event type (`wedding`, `birthday`, `community`), target date, city, guest count, total budget, currency, theme style, cultural traditions, dietary constraints, must-haves, and age group details.
+- Validated via strict Pydantic v2 schemas.
+- Supports 1-click presets for instant demo plan generation.
 
-### C. Deterministic Post-Processing & Repair Engine (`DeterministicRepairEngine`)
-- **Budget Normalization**: Guarantees that percentages sum to 100.00% and amounts sum to the exact total budget down to the penny. Enforces a 5-10% contingency reserve.
-- **Timeline Clamping & Compression**: Clamps dates between `today` and `event_date`. If lead time is < 30 days, activates a compressed sprint schedule and flags critical bookings as high-risk. Generates a day-of hourly run-of-show.
-- **Mandatory Vendor Injection**: Guarantees 100% mandatory categories are present for the event type with >= 4 checklist verification items each.
-- **Dietary & Age Guard**: Cleanses food items violating vegetarian, Jain, or vegan constraints; cleanses alcoholic items from kids parties.
+### C. Generative AI Engine & Fallback Mechanism (`backend/app/gemini_client.py` & `fallback_engine.py`)
+- Connects to Google Gemini (`gemini-2.5-flash`) via the `google-genai` SDK.
+- Enforces strict structured JSON schema outputs.
+- **3-Turn Feedback Retry Loop**: Captures Pydantic schema validation failures or JSON decode exceptions and returns the precise error to Gemini in a follow-up prompt to guide self-correction.
+- **Zero-Crash Fallback**: Automatically activates `FallbackTemplateEngine` if `GEMINI_API_KEY` is missing, invalid, or exhausted (HTTP 429), generating authentic celebration plans without returning 500 server errors.
 
-### D. Grounded AI Chat Assistant & Tool Calling (`ChatService`)
-- Grounded in active plan data to answer questions about budget status, days left, vendor bookings, and timelines.
-- Dispatches tool actions:
-  - `move_budget(from_cat, to_cat, amount_or_percent)`
-  - `adjust_event_date(new_date)`
-  - `update_vendor_status(category, status)`
-  - `update_task_status(task_id, status)`
-  - `add_custom_task(title, date)`
-  - `add_personalized_idea(category, title)`
-- Every tool call executes through the repair engine, keeping the plan 100% consistent.
+### D. Deterministic Post-Processing & Repair Engine (`backend/app/repair_engine.py`)
+- **Budget Normalization**: Guarantees that percentages sum to **exactly 100.00%** and allocated amounts match total budget down to the penny via high-precision Python `Decimal` arithmetic. Enforces a non-negotiable **5.00% to 10.00% Contingency Reserve**.
+- **Timeline Clamping & Sprint Compression**: Restricts milestone due dates to `today <= due_date <= event_date`. Automatically triggers compressed sprint schedules when lead time is under 30 days, flagging critical vendor contracts as `HIGH RISK`.
+- **Mandatory Vendor Injection**: Guarantees 100% presence of essential vendor categories for the event type with at least 4 verification checklist tasks each.
+- **Dietary & Age Guard**: Automatically removes non-vegetarian items for vegetarian/Jain events and purges alcohol recommendations from children's parties.
 
-### E. Persistence & Export Engine (`ExportService`)
-- SQLite storage via SQLAlchemy (`EventModel`, `ChatMessageModel`).
-- PDF generation using ReportLab with custom tables and typography.
-- Multi-section CSV export for spreadsheets.
+### E. AI Smart Budget Optimizer (`backend/app/budget_optimizer.py`)
+- **Natural Language Parsing**: Robust multi-pattern currency parser handling Indian numbering (`50 lakh`, `1.5 crore`, `₹50,00,000`), international formats (`5 million`), and raw digits (`5000000`).
+- **Category Taxonomy & Collision Detection**: Analyzes compound categories (e.g. "Attire, Makeup & Priest") against standard domains and detects overlapping or duplicate category titles.
+- **Category Protection**: Enables users to lock essential categories (e.g., Venue or Catering) against reductions during optimization passes.
+- **Reallocation Balancing**: Rebalances category adjustments while maintaining total budget invariants.
+
+### F. Smart Expense Tracking Ledger (`backend/app/expense_service.py`)
+- Records individual financial transactions with payment status (`Paid`, `Pending`, `Refunded`), payment method, transaction dates, and itemized receipt notes.
+- **Automated Budget Reconciliation**: Recalculates actual category spending upon expense insertion, update, or deletion, synchronizing real-time budget utilization across all views.
+- **One-Click CSV Export**: Exports a formatted financial ledger for accounting and audit reconciliation.
+
+### G. Guest Management & Attendance Tracking (`backend/app/guest_service.py`)
+- Maintains guest profiles with categories (`VIP`, `Family`, `Friend`, `Colleague`), plus-one headcounts, dietary restrictions, and RSVP status (`Attending`, `Confirmed`, `Declined`, `Pending`).
+- **Interactive CSV Bulk Import**: Parses raw CSV text, identifies missing or malformed rows, displays an interactive preview table, and bulk inserts deduplicated guest records.
+- **Guest Roster CSV Export**: Formatted guest rosters ready for security desks and catering staff.
+
+### H. Local Vendor Discovery & Comparison (`backend/app/vendor_service.py`)
+- Pre-seeded verified vendor directory categorized by service type, city, price tier, and star rating.
+- **AI Recommendation Search**: Evaluates user prompts against active event parameters and vendor offerings.
+- **Side-by-Side Comparison**: Compares quotes, pros, and cons to aid selection.
+- **Advance Expense Sync**: Booking an advance payment automatically posts a synchronized transaction to the Expense Tracking ledger.
+
+### I. Meteorological Intelligence Radar (`backend/app/weather_service.py`)
+- Resolves event destination coordinates via Open-Meteo Forward Geocoding API.
+- Retrieves 16-day live hourly forecasts and 10-year historical climate averages.
+- Computes atmospheric risk scores for Heat Stress, Rain Probability, and Wind Gusts.
+- **One-Click Timeline Mitigations**: Appends weather contingency tasks to the active event schedule with duplicate prevention.
+
+### J. Cultural Trilingual Invitation Studio (`backend/app/invitation_service.py`)
+- Generates localized invitation copy in **English**, **Hindi**, and **Gujarati** with authentic cultural greetings and Ganesh mantras.
+- **Embedded Unicode Gujarati Typography**: Embeds `Noto Sans Gujarati` TrueType fonts directly into ReportLab canvas rendering to eliminate missing glyphs (`.notdef` black boxes).
+- **Dynamic Layout Adaptation**: Computes typography and vertical layout spacing based on text length to minimize awkward canvas whitespace.
+- Generates high-resolution **PNG canvas cards**, formatted **PDF documents**, and pre-populated **WhatsApp share links**.
+
+### K. Grounded AI Assistant & Tool Execution (`backend/app/chat_service.py`)
+- Grounded conversational assistant maintaining multi-turn chat history.
+- Executes structured tool mutations (`move_budget`, `adjust_event_date`, `update_vendor_status`, `update_task_status`, `add_custom_task`, `add_personalized_idea`).
+- Routes all modifications through `DeterministicRepairEngine` to prevent state corruption.
+
+### L. Executive Command Center (`backend/app/executive_service.py`)
+- Aggregates 8 real-time cross-event operational KPIs.
+- Computes upcoming event countdowns, spending velocity, attendance ratios, and an auditable activity feed.
 
 ---
 
-## 3. Data Flow Diagram
+## 3. Data Flow & Request Lifecycle
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User
-    participant Frontend as React Frontend
-    participant API as FastAPI Backend
-    participant Gemini as Gemini API
-    participant Guard as Deterministic Repair
-    participant DB as SQLite Database
+    actor User as User / Browser
+    participant Gateway as FastAPI Router
+    participant Auth as Auth & IDOR Guard
+    participant Service as Business Domain Service
+    participant Gemini as Google Gemini API
+    participant Guard as Deterministic Repair Engine
+    participant DB as SQLAlchemy / Relational DB
 
-    User->>Frontend: Enters Intake Form / Chooses Preset
-    Frontend->>API: POST /api/events
-    API->>Gemini: generate_content(schema, prompt)
+    User->>Gateway: POST /api/events (Intake Payload + Bearer Token)
+    Gateway->>Auth: Validate JWT & User Status
+    Auth-->>Gateway: Authenticated UserModel
+    Gateway->>Service: PlanService.create_plan(intake, owner_id)
+    Service->>Gemini: Request Structured JSON Plan
     alt Gemini Success
-        Gemini-->>API: Raw JSON plan
-    else Timeout / No Key
-        API->>API: FallbackTemplateEngine
+        Gemini-->>Service: Structured JSON Response
+    else API Timeout / 429 Quota Exhausted
+        Service->>Service: FallbackTemplateEngine (Deterministic Fallback)
     end
-    API->>Guard: repair_full_plan(raw_plan, intake)
-    Guard-->>API: Guaranteed Invariants Plan
-    API->>DB: Save Event & Plan JSON
-    API-->>Frontend: FullEventPlan
-    Frontend-->>User: Displays Dashboard, Charts, Vendors, Timeline
-    User->>Frontend: Chat: "Move 5000 from Decor to Catering"
-    Frontend->>API: POST /api/chat
-    API->>Guard: Execute move_budget & normalize
-    Guard-->>API: Rebalanced Plan
-    API->>DB: Save updated plan & chat message
-    API-->>Frontend: ChatResponse + updated_plan
-    Frontend-->>User: Instant live chart update
+    Service->>Guard: Enforce Invariants (100% Math, Clamped Dates, Diet)
+    Guard-->>Service: Validated & Normalized FullEventPlan
+    Service->>DB: Persist Plan & Seed Categories
+    DB-->>Service: Stored Event Record
+    Service-->>Gateway: FullEventPlan
+    Gateway-->>User: HTTP 200 OK (JSON Payload)
 ```
+
+---
+
+## 4. Security Invariants
+
+1. **All Secrets from Environment**: Zero hardcoded API keys or cryptographic secrets in source code.
+2. **Password Hashing**: PBKDF2-HMAC-SHA256 with 100,000 iterations and random salt; plaintext passwords are never stored.
+3. **Data Isolation**: Strict user-level event ownership verification preventing IDOR vulnerabilities.
+4. **CORS Hardening**: Strict origin whitelisting; wildcard `*` is never combined with credentials.
+5. **Safe Database Operations**: Parameterized SQLAlchemy ORM queries protecting against SQL injection.

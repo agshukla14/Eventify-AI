@@ -43,7 +43,7 @@ interface ExecutiveDashboardProps {
   onToggleChat: () => void;
 }
 
-const COLORS = ['#0d9488', '#059669', '#f59e0b', '#e11d48', '#6366f1', '#ec4899'];
+const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#e11d48', '#8b5cf6', '#ec4899'];
 
 export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   currentPlan,
@@ -77,7 +77,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   if (loading && !data) {
     return (
       <div className="flex flex-col items-center justify-center p-16 space-y-3 bg-white rounded-3xl border border-slate-200">
-        <div className="w-8 h-8 border-4 border-teal-600 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         <p className="text-sm font-semibold text-slate-600">Loading Executive Command Center...</p>
       </div>
     );
@@ -93,7 +93,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   const rsvpPieData = rsvp
     ? [
-        { name: 'Confirmed', value: rsvp.confirmed, color: '#0d9488' },
+        { name: 'Confirmed', value: rsvp.confirmed, color: '#4f46e5' },
         { name: 'Pending', value: rsvp.pending, color: '#f59e0b' },
         { name: 'Declined', value: rsvp.declined, color: '#94a3b8' },
       ].filter((d) => d.value > 0)
@@ -102,12 +102,12 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Header & Quick Action Shortcuts */}
-      <div className="bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-6">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="px-3 py-0.5 text-xs font-bold uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-full">
+              <span className="px-3 py-0.5 text-xs font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full">
                 SaaS Command Center
               </span>
               <span className="text-xs text-slate-400">Live Executive Overview</span>
@@ -123,7 +123,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={onOpenNewModal}
-              className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold bg-teal-500 hover:bg-teal-400 text-teal-950 rounded-xl shadow-md transition-all active:scale-95"
+              className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-md shadow-indigo-600/25 transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>New Celebration</span>
@@ -164,24 +164,24 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
       </div>
 
       {/* 8 Primary Executive KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         {/* KPI 1: Total Events */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-teal-300 transition-colors">
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 flex-shrink-0">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
             <Calendar className="w-6 h-6" />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Events</p>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-2xl font-black text-slate-900">{kpis?.total_events || 0}</span>
-              <span className="text-2xs text-teal-600 font-bold">Planned</span>
+              <span className="text-2xs text-indigo-600 font-bold">Planned</span>
             </div>
             <p className="text-2xs text-slate-500 mt-0.5">In organizer directory</p>
           </div>
         </div>
 
         {/* KPI 2: Upcoming Events */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-teal-300 transition-colors">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
           <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
             <Clock className="w-6 h-6" />
           </div>
@@ -196,7 +196,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         </div>
 
         {/* KPI 3: Total Planned Budget */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-teal-300 transition-colors">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
             <Wallet className="w-6 h-6" />
           </div>
@@ -204,7 +204,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Planned Budget</p>
             <div className="flex items-baseline gap-1 mt-0.5 truncate">
               <span className="text-xl sm:text-2xl font-black text-slate-900 truncate">
-                ₹{(kpis?.total_planned_budget || 0).toLocaleString()}
+                ₹{(kpis?.total_planned_budget || 0).toLocaleString('en-IN')}
               </span>
             </div>
             <p className="text-2xs text-slate-500 mt-0.5">Total event allocations</p>
@@ -212,7 +212,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         </div>
 
         {/* KPI 4: Actual Expenses */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-teal-300 transition-colors">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
           <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 flex-shrink-0">
             <CreditCard className="w-6 h-6" />
           </div>
@@ -220,7 +220,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Actual Expenses</p>
             <div className="flex items-baseline gap-1 mt-0.5 truncate">
               <span className="text-xl sm:text-2xl font-black text-rose-600 truncate">
-                ₹{(kpis?.total_actual_expenses || 0).toLocaleString()}
+                ₹{(kpis?.total_actual_expenses || 0).toLocaleString('en-IN')}
               </span>
             </div>
             <p className="text-2xs text-slate-500 mt-0.5">Disbursed & verified</p>
@@ -228,7 +228,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         </div>
 
         {/* KPI 5: Remaining Budget */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-teal-300 transition-colors">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
             <PiggyBank className="w-6 h-6" />
           </div>
@@ -240,7 +240,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                   (kpis?.remaining_budget || 0) < 0 ? 'text-rose-600' : 'text-slate-900'
                 }`}
               >
-                ₹{(kpis?.remaining_budget || 0).toLocaleString()}
+                ₹{(kpis?.remaining_budget || 0).toLocaleString('en-IN')}
               </span>
             </div>
             <p className="text-2xs text-slate-500 mt-0.5">Unallocated reserves</p>
@@ -248,22 +248,22 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         </div>
 
         {/* KPI 6: Confirmed Guests */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-teal-300 transition-colors">
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 flex-shrink-0">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
             <UserCheck className="w-6 h-6" />
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Confirmed Guests</p>
             <div className="flex items-baseline gap-1.5 mt-0.5">
               <span className="text-2xl font-black text-slate-900">{kpis?.total_confirmed_guests || 0}</span>
-              <span className="text-2xs text-teal-600 font-bold">Attending</span>
+              <span className="text-2xs text-indigo-600 font-bold">Attending</span>
             </div>
             <p className="text-2xs text-slate-500 mt-0.5">Includes confirmed plus-ones</p>
           </div>
         </div>
 
         {/* KPI 7: Pending RSVPs */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-teal-300 transition-colors">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
           <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600 flex-shrink-0">
             <Users className="w-6 h-6" />
           </div>
@@ -278,7 +278,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         </div>
 
         {/* KPI 8: Booked Vendors */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-teal-300 transition-colors">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex items-center gap-4 hover:border-indigo-300 transition-colors">
           <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 flex-shrink-0">
             <Store className="w-6 h-6" />
           </div>
@@ -364,7 +364,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
               </div>
               <button
                 onClick={() => onNavigateTab('budget')}
-                className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1"
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
               >
                 <span>AI Optimizer</span>
                 <ChevronRight className="w-4 h-4" />
@@ -378,8 +378,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-bold text-slate-700">{b.category}</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-slate-500">₹{b.spent.toLocaleString()} spent</span>
-                        <span className="text-slate-400">/ ₹{b.allocated.toLocaleString()}</span>
+                        <span className="text-slate-500">₹{b.spent.toLocaleString('en-IN')} spent</span>
+                        <span className="text-slate-400">/ ₹{b.allocated.toLocaleString('en-IN')}</span>
                         <span
                           className={`font-bold px-1.5 py-0.2 rounded-md text-2xs ${
                             b.percentage_used > 100
@@ -394,7 +394,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${
-                          b.percentage_used > 100 ? 'bg-rose-500' : 'bg-teal-600'
+                          b.percentage_used > 100 ? 'bg-rose-500' : 'bg-indigo-600'
                         }`}
                         style={{ width: `${Math.min(100, b.percentage_used)}%` }}
                       />
@@ -416,7 +416,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
               </div>
               <button
                 onClick={onOpenNewModal}
-                className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1"
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
               >
                 <span>+ Add Event</span>
               </button>
@@ -431,7 +431,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     onClick={() => onSelectEvent(ev.event_id)}
                     className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-wrap items-center justify-between gap-4 ${
                       isSelected
-                        ? 'border-teal-500 bg-teal-50/40 shadow-xs'
+                        ? 'border-indigo-500 bg-indigo-50/40 shadow-xs'
                         : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50/60'
                     }`}
                   >
@@ -447,7 +447,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                           </span>
                         </div>
                         <p className="text-2xs text-slate-500 mt-0.5">
-                          📍 {ev.city} • 📅 {ev.date} • 👥 {ev.guest_count} Guests • Budget: ₹{ev.total_budget.toLocaleString()}
+                          📍 {ev.city} • 📅 {ev.date} • 👥 {ev.guest_count} Guests • Budget: ₹{ev.total_budget.toLocaleString('en-IN')}
                         </p>
                       </div>
                     </div>
@@ -455,7 +455,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     <div className="flex items-center gap-3">
                       <div className="text-right hidden sm:block">
                         <span className="text-xs font-bold text-slate-800">
-                          ₹{ev.actual_spent.toLocaleString()}
+                          ₹{ev.actual_spent.toLocaleString('en-IN')}
                         </span>
                         <p className="text-2xs text-slate-400">Spent</p>
                       </div>
@@ -464,7 +464,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                           e.stopPropagation();
                           onSelectEvent(ev.event_id);
                         }}
-                        className="px-3 py-1.5 text-xs font-bold text-teal-700 hover:bg-teal-100/70 rounded-lg transition-colors"
+                        className="px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100/70 rounded-lg transition-colors cursor-pointer"
                       >
                         {isSelected ? 'Active Plan' : 'Select'}
                       </button>
@@ -487,7 +487,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
               </div>
               <button
                 onClick={() => onNavigateTab('guests')}
-                className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1"
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
               >
                 <span>Guest Roster</span>
                 <ChevronRight className="w-4 h-4" />
@@ -515,9 +515,9 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                   </ResponsiveContainer>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-slate-100">
-                  <div className="p-2 rounded-xl bg-teal-50">
-                    <p className="text-xs font-bold text-teal-900">{rsvp.confirmed}</p>
-                    <p className="text-2xs text-teal-600 font-medium">Confirmed</p>
+                  <div className="p-2 rounded-xl bg-indigo-50">
+                    <p className="text-xs font-bold text-indigo-900">{rsvp.confirmed}</p>
+                    <p className="text-2xs text-indigo-600 font-medium">Confirmed</p>
                   </div>
                   <div className="p-2 rounded-xl bg-amber-50">
                     <p className="text-xs font-bold text-amber-900">{rsvp.pending}</p>
@@ -541,7 +541,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 <h3 className="font-bold text-slate-900 text-sm">Vendor Contracts Summary</h3>
                 <button
                   onClick={() => onNavigateTab('find_vendors')}
-                  className="text-xs font-bold text-teal-600 hover:text-teal-700 flex items-center gap-1"
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 cursor-pointer"
                 >
                   <span>Directory</span>
                   <ChevronRight className="w-4 h-4" />
@@ -551,14 +551,14 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
                   <p className="text-2xs text-slate-400 font-bold uppercase">Contracted Value</p>
                   <p className="text-base font-extrabold text-slate-900 mt-0.5">
-                    ₹{vendorStats.total_contracted_amount.toLocaleString()}
+                    ₹{vendorStats.total_contracted_amount.toLocaleString('en-IN')}
                   </p>
                   <p className="text-2xs text-slate-500 mt-0.5">{vendorStats.booked_count} Booked</p>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
                   <p className="text-2xs text-slate-400 font-bold uppercase">Advance Paid</p>
                   <p className="text-base font-extrabold text-emerald-600 mt-0.5">
-                    ₹{vendorStats.advance_paid_amount.toLocaleString()}
+                    ₹{vendorStats.advance_paid_amount.toLocaleString('en-IN')}
                   </p>
                   <p className="text-2xs text-slate-500 mt-0.5">{vendorStats.shortlisted_count} In Talks</p>
                 </div>
@@ -578,7 +578,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                         act.activity_type === 'expense'
                           ? 'bg-rose-100 text-rose-700'
                           : act.activity_type === 'rsvp'
-                          ? 'bg-teal-100 text-teal-700'
+                          ? 'bg-indigo-100 text-indigo-700'
                           : 'bg-purple-100 text-purple-700'
                       }`}
                     >

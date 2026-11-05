@@ -45,7 +45,7 @@ export const VendorsTab: React.FC<VendorsTabProps> = ({ plan, onUpdatePlan }) =>
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="px-3 py-1 text-xs font-semibold bg-teal-50 text-teal-700 border border-teal-200 rounded-lg">
+          <span className="px-3 py-1 text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg">
             {vendors.filter(v => v.status === 'booked' || v.status === 'paid').length} of {vendors.length} Booked
           </span>
         </div>
@@ -63,7 +63,7 @@ export const VendorsTab: React.FC<VendorsTabProps> = ({ plan, onUpdatePlan }) =>
               v.status === 'paid'
                 ? 'bg-emerald-100 text-emerald-800'
                 : v.status === 'booked'
-                ? 'bg-teal-100 text-teal-800'
+                ? 'bg-indigo-100 text-indigo-800'
                 : v.status === 'quoted'
                 ? 'bg-amber-100 text-amber-800'
                 : 'bg-slate-100 text-slate-600';
@@ -74,7 +74,7 @@ export const VendorsTab: React.FC<VendorsTabProps> = ({ plan, onUpdatePlan }) =>
                 onClick={() => setSelectedVendorId(v.id)}
                 className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                   isSelected
-                    ? 'bg-white border-teal-500 shadow-sm ring-2 ring-teal-500/20'
+                    ? 'bg-white border-indigo-500 shadow-sm ring-2 ring-indigo-500/20'
                     : 'bg-white border-slate-200/80 hover:border-slate-300 hover:bg-slate-50/50'
                 }`}
               >
@@ -101,7 +101,7 @@ export const VendorsTab: React.FC<VendorsTabProps> = ({ plan, onUpdatePlan }) =>
 
                 <div className="mt-2.5 flex items-center justify-between text-2xs text-slate-400">
                   <span>{completedCount} / {v.checklist.length} checklist tasks verified</span>
-                  <ChevronRight className={`w-3.5 h-3.5 text-slate-400 ${isSelected ? 'text-teal-600' : ''}`} />
+                  <ChevronRight className={`w-3.5 h-3.5 text-slate-400 ${isSelected ? 'text-indigo-600' : ''}`} />
                 </div>
               </div>
             );
@@ -138,7 +138,7 @@ export const VendorsTab: React.FC<VendorsTabProps> = ({ plan, onUpdatePlan }) =>
                 <select
                   value={currentVendor.status}
                   onChange={e => handleUpdateStatus(currentVendor.id, e.target.value)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   <option value="not_contacted">Not Contacted</option>
                   <option value="quoted">Quoted</option>
@@ -166,7 +166,7 @@ export const VendorsTab: React.FC<VendorsTabProps> = ({ plan, onUpdatePlan }) =>
 
               <div>
                 <span className="text-2xs font-semibold text-slate-400 uppercase">Linked Budget Category</span>
-                <p className="text-xs font-bold text-teal-800 mt-1.5">{currentVendor.linked_budget_category}</p>
+                <p className="text-xs font-bold text-indigo-800 mt-1.5">{currentVendor.linked_budget_category}</p>
               </div>
             </div>
 
@@ -186,7 +186,7 @@ export const VendorsTab: React.FC<VendorsTabProps> = ({ plan, onUpdatePlan }) =>
                     onClick={() => handleToggleChecklistItem(currentVendor.id, item.id)}
                     className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-colors ${
                       item.is_completed
-                        ? 'bg-teal-50/40 border-teal-200'
+                        ? 'bg-indigo-50/40 border-indigo-200'
                         : 'bg-white border-slate-200/80 hover:bg-slate-50'
                     }`}
                   >
@@ -194,7 +194,7 @@ export const VendorsTab: React.FC<VendorsTabProps> = ({ plan, onUpdatePlan }) =>
                       type="button"
                       className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${
                         item.is_completed
-                          ? 'bg-teal-600 border-teal-600 text-white'
+                          ? 'bg-indigo-600 border-indigo-600 text-white'
                           : 'border-slate-300 bg-white'
                       }`}
                     >
@@ -210,7 +210,7 @@ export const VendorsTab: React.FC<VendorsTabProps> = ({ plan, onUpdatePlan }) =>
                           {item.item_type.replace('_', ' ')}
                         </span>
                         {item.target_date && (
-                          <span className="text-2xs text-teal-600 font-medium">Due: {item.target_date}</span>
+                          <span className="text-2xs text-indigo-600 font-medium">Due: {item.target_date}</span>
                         )}
                         {item.notes && (
                           <span className="text-2xs text-slate-400 italic truncate max-w-xs">{item.notes}</span>

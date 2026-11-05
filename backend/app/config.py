@@ -1,14 +1,29 @@
-import os
-from pathlib import Path
-from dotenv import load_dotenv
+"""
+Configuration module for Eventify AI.
+Loads settings from environment and core configuration.
+"""
+from .core.config import (
+    BASE_DIR,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    APP_ENV,
+    PORT,
+    FRONTEND_PORT,
+    DATABASE_URL,
+    DEFAULT_CURRENCY,
+    JWT_SECRET,
+    ALLOWED_ORIGINS,
+)
 
-# Load .env file from project root
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-load_dotenv(BASE_DIR / ".env")
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-APP_ENV = os.getenv("APP_ENV", "development")
-PORT = int(os.getenv("PORT", "8000"))
-FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "5173"))
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'celebration_planner.db'}")
-DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "INR")
+__all__ = [
+    "BASE_DIR",
+    "GEMINI_API_KEY",
+    "GEMINI_MODEL",
+    "APP_ENV",
+    "PORT",
+    "FRONTEND_PORT",
+    "DATABASE_URL",
+    "DEFAULT_CURRENCY",
+    "JWT_SECRET",
+    "ALLOWED_ORIGINS",
+]

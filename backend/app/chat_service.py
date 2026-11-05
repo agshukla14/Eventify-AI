@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, date
@@ -9,7 +10,9 @@ from .models import ChatMessageModel
 from .schemas import FullEventPlan, ChatResponse, ChatMessage, TimelineTask, PersonalizedIdeaItem
 from .repair_engine import DeterministicRepairEngine, parse_date_safe
 from .plan_service import PlanService
-from .config import GEMINI_API_KEY
+from .config import GEMINI_API_KEY, GEMINI_MODEL
+
+logger = logging.getLogger(__name__)
 
 
 class ChatService:
@@ -48,9 +51,10 @@ class ChatService:
             reply_content = f"Plan updated successfully! " + " ".join(execution_notes)
             final_plan = repaired_plan
         else:
-            # Informational / grounded Q&A
+            # Informational / creative / conversational prompt processed by Gemini AI
             final_plan = plan
-            reply_content = self._answer_grounded_question(plan, user_text)
+            history = self.get_history(event_id)
+            reply_content = self._generate_gemini_reply(plan, user_text, history)
 
         # Save assistant message to DB
         asst_msg_id = str(uuid.uuid4())[:8]
@@ -271,9 +275,137 @@ class ChatService:
 
         return tools_run, plan, notes
 
-    def _answer_grounded_question(self, plan: FullEventPlan, text: str) -> str:
+    def _generate_gemini_reply(
+        self,
+        plan: FullEventPlan,
+        user_text: str,
+        history: List[ChatMessage],
+    ) -> str:
         """
-        Answers questions grounded directly in the event plan data.
+        Invokes the official Google GenAI SDK to generate a tailored, context-aware,
+        and grounded conversational response.
+        """
+        if not GEMINI_API_KEY:
+            basic_ans = self._answer_basic_grounded_question(plan, user_text)
+            if basic_ans:
+                return basic_ans
+            return (
+                "The Gemini AI service is not configured. Please set the GEMINI_API_KEY "
+                "environment variable in your .env file to enable intelligent planning responses."
+            )
+
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=GEMINI_API_KEY)
+
+            today = date.today()
+            ev_date = parse_date_safe(plan.intake.date)
+            days_left = (ev_date - today).days
+
+            booked_v = [v.category for v in plan.vendors if v.status in ["booked", "paid"]]
+            pending_v = [v.category for v in plan.vendors if v.status not in ["booked", "paid"]]
+            con_item = next((i for i in plan.budget.items if i.is_contingency), None)
+            con_amt = con_item.allocated_amount if con_item else 0.0
+
+            budget_categories = ", ".join([f"{i.category} ({i.allocated_amount:,.0f} {plan.intake.currency})" for i in plan.budget.items[:6]])
+            upcoming_tasks = ", ".join([f"{t.title} (due {t.due_date})" for t in plan.timeline.milestones if t.status == "pending"][:4])
+
+            system_instruction = f"""You are the official Eventify AI Celebration & Event Planner Assistant.
+You are an expert, creative, culturally attuned, and logistically sound event organizer.
+You understand the user's specific questions and provide relevant, comprehensive, and engaging answers.
+
+CURRENT EVENT CONTEXT:
+- Event: {plan.intake.title} ({plan.intake.event_type.title()})
+- Target Date: {plan.intake.date} ({days_left} days left until celebration day!)
+- City / Location: {plan.intake.city}
+- Guests: {plan.intake.guest_count} attendees
+- Total Budget: {plan.budget.total_budget:,.2f} {plan.budget.currency} (Contingency: {con_amt:,.2f} {plan.budget.currency})
+- Budget Categories: {budget_categories}
+- Theme & Aesthetic: {plan.intake.theme_style or 'Curated Celebration'}
+- Cultural Preferences: {plan.intake.cultural_preferences or 'Standard celebratory customs'}
+- Dietary Preferences: {', '.join(plan.intake.dietary_preferences) or 'Standard options'}
+- Must-Haves: {', '.join(plan.intake.must_haves) or 'None specified'}
+- Booked Vendors: {', '.join(booked_v) or 'None yet'}
+- Pending Vendors: {', '.join(pending_v) or 'None'}
+- Upcoming Tasks: {upcoming_tasks or 'All completed'}
+
+CRITICAL GUIDELINES:
+1. Accurately and directly answer the user's question with thoughtful, tailored details.
+2. If the user asks for a specific count (e.g., "five birthday decoration themes", "3 catering menu options"), you MUST provide EXACTLY that number of items with distinct names and actionable descriptions.
+3. Incorporate the event's city ({plan.intake.city}), cultural vibe, and dietary restrictions when relevant.
+4. For questions about countdown, days left, or event date, explicitly specify how many "days left" or "days remaining" (e.g., "There are {days_left} days left until your celebration!").
+5. For questions about budget, vendors, or schedule, use the exact figures from the event context above.
+6. Use clean markdown formatting (bullet points, bold highlights) for readability.
+"""
+
+            contents_list = [system_instruction]
+
+            # Append conversation history for multi-turn context (excluding current message)
+            if history:
+                recent_history = history[-6:]
+                history_text = "RECENT CONVERSATION HISTORY:\n"
+                for h in recent_history:
+                    if h.content == user_text and h.role == "user":
+                        continue
+                    sender = "User" if h.role == "user" else "Assistant"
+                    history_text += f"{sender}: {h.content}\n"
+                if len(history_text) > len("RECENT CONVERSATION HISTORY:\n"):
+                    contents_list.append(history_text)
+
+            contents_list.append(f"User Request: {user_text}")
+
+            models_to_try = [
+                GEMINI_MODEL,
+                "gemini-3.5-flash-lite",
+                "gemini-3.8-flash",
+                "gemini-2.5-flash",
+            ]
+            seen = set()
+            models_to_try = [m for m in models_to_try if m and not (m in seen or seen.add(m))]
+
+            last_err = None
+            for model_name in models_to_try:
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=contents_list,
+                        config=types.GenerateContentConfig(
+                            temperature=0.7,
+                        ),
+                    )
+                    if response and response.text:
+                        return response.text.strip()
+                except Exception as model_err:
+                    last_err = model_err
+                    logger.warning(f"Gemini generation with {model_name} failed: {model_err}")
+                    continue
+
+            if last_err:
+                raise last_err
+
+            return "I apologize, but I was unable to generate a response at this time. Please try again."
+
+        except Exception as e:
+            logger.error(f"Gemini API chat error: {e}", exc_info=True)
+            fallback_ans = self._answer_basic_grounded_question(plan, user_text)
+            if fallback_ans:
+                return fallback_ans
+            err_name = type(e).__name__
+            err_msg = str(e)
+            if "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg:
+                return "The Gemini AI service is currently experiencing rate limits (429 Resource Exhausted). Please wait a moment and try again."
+            if "UNAVAILABLE" in err_msg or "503" in err_msg:
+                return "The Gemini AI service is temporarily experiencing high demand (503 Service Unavailable). Please try again shortly."
+            if "API_KEY_INVALID" in err_msg or "400" in err_msg:
+                return "The configured GEMINI_API_KEY appears to be invalid or unauthorized. Please verify your API key."
+            return f"I encountered an issue generating an AI response via Gemini ({err_name}). Please try again in a moment."
+
+    def _answer_basic_grounded_question(self, plan: FullEventPlan, text: str) -> Optional[str]:
+        """
+        Deterministic, grounded fallback answer for basic factual questions about the plan
+        when Gemini AI key is not configured (e.g. offline unit test environments).
         """
         lower = text.lower()
         today = date.today()
@@ -289,7 +421,6 @@ class ChatService:
 
         # Budget questions
         if "budget" in lower or "spend" in lower or "cost" in lower or "allocation" in lower:
-            # Check if specific category mentioned
             for item in plan.budget.items:
                 if item.category.lower() in lower:
                     return (
@@ -323,7 +454,7 @@ class ChatService:
                 f"{len(pending_v)} categories are pending quotes or booking ({', '.join(v.category for v in pending_v)})."
             )
 
-        # Timeline / high risk / tasks
+        # Timeline questions
         if "timeline" in lower or "task" in lower or "milestone" in lower or "risk" in lower:
             high_risk = [t for t in plan.timeline.milestones if t.is_high_risk]
             past_due = [t for t in plan.timeline.milestones if t.is_past_due]
@@ -336,28 +467,7 @@ class ChatService:
                 f"Next upcoming task: '{pending[0].title}' due on {pending[0].due_date} if any."
             )
 
-        # Ideas / food / menu / themes
-        if "food" in lower or "menu" in lower or "diet" in lower or "catering" in lower:
-            food_titles = [f.title for f in plan.ideas.food_menu]
-            return (
-                f"Curated menu ideas adhering to dietary preferences ({', '.join(plan.intake.dietary_preferences) or 'Standard'}): "
-                f"{'; '.join(food_titles)}. Every item includes a budget-friendly swap option!"
-            )
-
-        if "theme" in lower or "decor" in lower:
-            theme_titles = [t.title for t in plan.ideas.themes]
-            return (
-                f"Personalized themes for {plan.intake.title} in {plan.intake.city}: {'; '.join(theme_titles)}. "
-                f"Designed to capture the {plan.intake.theme_style or 'celebration'} vibe."
-            )
-
-        # Default summary response
-        return (
-            f"Here is your plan snapshot for '{plan.intake.title}' ({plan.intake.event_type.title()}): "
-            f"{days_left} days left | Budget: {plan.budget.total_budget:,.2f} {plan.budget.currency} "
-            f"| Tasks: {len(plan.timeline.milestones)} ({plan.timeline.high_risk_count} high-risk) "
-            f"| Vendors: {len(plan.vendors)}. How can I assist you with adjusting or expanding your plan?"
-        )
+        return None
 
     def get_history(self, event_id: str) -> List[ChatMessage]:
         records = (

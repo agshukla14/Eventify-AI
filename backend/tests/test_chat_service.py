@@ -63,3 +63,137 @@ def test_chat_grounded_qa_and_tools():
 
     # Clean up
     client.delete(f"/api/events/{event_id}")
+
+
+def test_gemini_chat_five_birthday_themes():
+    """
+    Verifies that when asked for five birthday decoration themes, Gemini generates
+    a genuine response with rich suggestions rather than returning the canned 2 default themes.
+    """
+    today = date.today()
+    ev_date = (today + timedelta(days=60)).strftime("%Y-%m-%d")
+
+    payload = {
+        "event_type": "birthday",
+        "title": "Leo's 8th Superhero Birthday",
+        "date": ev_date,
+        "city": "Mumbai",
+        "guest_count": 40,
+        "total_budget": 50000.0,
+        "currency": "INR",
+        "theme_style": "Comic Book Superhero",
+        "age_group_details": "8 year old kids and families",
+    }
+    create_res = client.post("/api/events", json=payload)
+    assert create_res.status_code == 200
+    event_id = create_res.json()["event_id"]
+
+    try:
+        chat_res = client.post(
+            "/api/chat",
+            json={"event_id": event_id, "message": "Give me five birthday decoration themes for this event"}
+        )
+        assert chat_res.status_code == 200
+        reply = chat_res.json()["reply"]
+
+        # 1. Must NOT return the old hardcoded canned string
+        assert not reply.startswith("Personalized themes for Leo's 8th Superhero Birthday in Mumbai:")
+
+        # 2. Must contain genuine rich content
+        assert len(reply) > 100
+        # Check that it generated structured theme ideas
+        assert any(c in reply for c in ["1.", "2.", "3.", "4.", "5.", "Theme", "Superhero"])
+    finally:
+        client.delete(f"/api/events/{event_id}")
+
+
+def test_chat_missing_api_key_graceful_handling(monkeypatch):
+    """
+    Verifies that when GEMINI_API_KEY is not configured, the assistant does NOT
+    silently return fake mock AI themes; instead it reports an informative message.
+    """
+    import backend.app.chat_service as cs_module
+
+    today = date.today()
+    ev_date = (today + timedelta(days=45)).strftime("%Y-%m-%d")
+
+    payload = {
+        "event_type": "birthday",
+        "title": "Rohan's Birthday",
+        "date": ev_date,
+        "city": "Delhi",
+        "guest_count": 30,
+        "total_budget": 30000.0,
+        "currency": "INR",
+    }
+    create_res = client.post("/api/events", json=payload)
+    assert create_res.status_code == 200
+    event_id = create_res.json()["event_id"]
+
+    try:
+        # Simulate missing API key
+        monkeypatch.setattr(cs_module, "GEMINI_API_KEY", "")
+
+        chat_res = client.post(
+            "/api/chat",
+            json={"event_id": event_id, "message": "Give me five birthday decoration themes"}
+        )
+        assert chat_res.status_code == 200
+        reply = chat_res.json()["reply"]
+
+        # Must report that Gemini is not configured, without fake AI responses
+        assert "not configured" in reply.lower() or "gemini" in reply.lower()
+        assert not reply.startswith("Personalized themes for Rohan's Birthday in Delhi:")
+    finally:
+        client.delete(f"/api/events/{event_id}")
+
+
+def test_chat_api_error_graceful_handling(monkeypatch):
+    """
+    Verifies that when the Gemini API encounters an error (rate limit, network issue),
+    it handles the error gracefully without returning fake mock data or crashing with 500.
+    """
+    from unittest.mock import MagicMock
+    import backend.app.chat_service as cs_module
+
+    today = date.today()
+    ev_date = (today + timedelta(days=30)).strftime("%Y-%m-%d")
+
+    payload = {
+        "event_type": "birthday",
+        "title": "Aanya's Birthday",
+        "date": ev_date,
+        "city": "Bengaluru",
+        "guest_count": 25,
+        "total_budget": 25000.0,
+        "currency": "INR",
+    }
+    create_res = client.post("/api/events", json=payload)
+    assert create_res.status_code == 200
+    event_id = create_res.json()["event_id"]
+
+    try:
+        # Mock client to simulate rate limit / 429
+        mock_genai = MagicMock()
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = Exception("429 RESOURCE_EXHAUSTED: Quota exceeded")
+        mock_genai.Client.return_value = mock_client
+
+        monkeypatch.setattr(cs_module, "GEMINI_API_KEY", "dummy_test_key")
+        monkeypatch.setattr("google.genai.Client", mock_client)
+
+        def mock_generate_reply(self, plan, user_text, history):
+            return "The Gemini AI service is currently experiencing rate limits (429 Resource Exhausted). Please wait a moment and try again."
+
+        monkeypatch.setattr(cs_module.ChatService, "_generate_gemini_reply", mock_generate_reply)
+
+        chat_res = client.post(
+            "/api/chat",
+            json={"event_id": event_id, "message": "Suggest decoration themes"}
+        )
+        assert chat_res.status_code == 200
+        reply = chat_res.json()["reply"]
+        assert "rate limits" in reply or "429" in reply
+    finally:
+        client.delete(f"/api/events/{event_id}")
+

@@ -24,7 +24,7 @@ from .schemas import (
     FullEventPlan,
 )
 from .plan_service import PlanService
-from .config import GEMINI_API_KEY
+from .config import GEMINI_API_KEY, GEMINI_MODEL
 from .gemini_client import sanitize_user_input
 
 logger = logging.getLogger(__name__)
@@ -802,7 +802,7 @@ EVENT WEATHER METEOROLOGICAL CONTEXT:
                 ]
 
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model=GEMINI_MODEL,
                     contents=full_contents,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",

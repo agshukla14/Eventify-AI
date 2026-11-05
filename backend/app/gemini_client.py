@@ -4,7 +4,7 @@ import re
 from typing import Dict, Any, Optional, Tuple
 from pydantic import ValidationError
 
-from .config import GEMINI_API_KEY
+from .config import GEMINI_API_KEY, GEMINI_MODEL
 from .schemas import EventIntake, FullEventPlan
 from .repair_engine import DeterministicRepairEngine
 from .fallback_engine import FallbackTemplateEngine
@@ -168,7 +168,7 @@ Event Planning Details:
 
                 logger.info(f"Invoking Gemini (attempt {attempt}/{max_retries})...")
                 response = self.client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model=GEMINI_MODEL,
                     contents=full_contents,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",

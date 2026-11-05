@@ -44,15 +44,45 @@ class PlanService:
         record = self.db.query(EventModel).filter(EventModel.id == event_id).first()
         if not record:
             return None
+        from .expense_service import ExpenseService
+        ExpenseService(self.db)._sync_plan_actual_spent(record)
         data = json.loads(record.plan_json)
-        return FullEventPlan(**data)
+        plan = FullEventPlan(**data)
+
+        # Dynamically verify and repair timeline run-of-show for any retrieved event
+        repaired_timeline = DeterministicRepairEngine.repair_timeline(
+            raw_tasks=[m.model_dump() for m in plan.timeline.milestones],
+            raw_run_of_show=[r.model_dump() for r in plan.timeline.run_of_show],
+            intake=plan.intake,
+        )
+        if repaired_timeline.run_of_show != plan.timeline.run_of_show:
+            plan.timeline = repaired_timeline
+            record.plan_json = json.dumps(plan.model_dump())
+            self.db.commit()
+
+        return plan
 
     def update_plan(self, event_id: str, updated_plan: FullEventPlan) -> FullEventPlan:
+        # Check if actual_spent was manually adjusted in updated_plan and persist to ledger
+        from .expense_service import ExpenseService, categories_match
+        from .models import ExpenseModel
+        exp_service = ExpenseService(self.db)
+        expenses = self.db.query(ExpenseModel).filter(ExpenseModel.event_id == event_id).all()
+        for item in updated_plan.budget.items:
+            cat_ledger_spent = sum(
+                e.amount for e in expenses
+                if (e.category or "").strip().lower() == (item.category or "").strip().lower()
+            )
+            if round(item.actual_spent, 2) != round(cat_ledger_spent, 2):
+                exp_service.adjust_budget_spent(event_id, item.category, item.actual_spent)
+                expenses = self.db.query(ExpenseModel).filter(ExpenseModel.event_id == event_id).all()
+
         # Ensure updated plan is run through the repair engine to maintain invariants
         repaired = DeterministicRepairEngine.repair_full_plan(
             raw_plan=updated_plan.model_dump(),
             intake=updated_plan.intake,
             existing_event_id=event_id,
+            preserve_categories_only=True,
         )
 
         record = self.db.query(EventModel).filter(EventModel.id == event_id).first()
@@ -69,6 +99,11 @@ class PlanService:
             record.updated_at = repaired.updated_at
             self.db.commit()
             self.db.refresh(record)
+
+            # Sync ledger actual spent to record so plan_json is canonical
+            exp_service._sync_plan_actual_spent(record)
+            plan_data = json.loads(record.plan_json)
+            repaired = FullEventPlan(**plan_data)
 
         return repaired
 
@@ -90,7 +125,7 @@ class PlanService:
                 ev_date = parse_date_safe(plan.intake.date)
                 days_left = (ev_date - today).days
 
-                spent = plan.budget.total_actual_spent
+                spent = round(sum(e.amount for e in rec.expenses), 2) if rec.expenses else plan.budget.total_actual_spent
                 total_b = plan.budget.total_budget
                 used_pct = round((spent / total_b * 100), 1) if total_b > 0 else 0.0
 

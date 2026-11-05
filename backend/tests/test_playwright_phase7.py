@@ -5,6 +5,8 @@ import uvicorn
 from playwright.sync_api import sync_playwright
 from backend.app.main import app
 
+pytestmark = pytest.mark.playwright
+
 TEST_HOST = "127.0.0.1"
 TEST_PORT = 8915
 
@@ -72,9 +74,18 @@ def test_playwright_phase7_executive_dashboard_and_auth_flow():
         page.wait_for_selector("text=Executive Celebration Operations", timeout=8000)
 
         # 6. Test Auth Modal
-        sign_in_btn = page.locator("header button:has-text('Sign In')")
-        sign_in_btn.click()
-        page.wait_for_selector("text=Eventify AI Organizer Portal", timeout=5000)
+        if not page.locator("text=Eventify AI Organizer Portal").is_visible():
+            sign_in_btn = page.locator("header button:has-text('Sign In')")
+            if not sign_in_btn.is_visible():
+                user_profile_btn = page.locator("header div.relative button").last
+                user_profile_btn.click()
+                sign_out_btn = page.locator("button:has-text('Sign Out')")
+                if sign_out_btn.is_visible():
+                    sign_out_btn.click()
+            else:
+                sign_in_btn.click()
+
+        page.wait_for_selector("text=Eventify AI Organizer Portal", timeout=8000)
         assert page.locator("input[type='email']").is_visible()
         assert page.locator("input[type='password']").is_visible()
 
@@ -83,6 +94,7 @@ def test_playwright_phase7_executive_dashboard_and_auth_flow():
         guest_btn.click()
 
         # Verify modal closes and executive dashboard is intact
+        page.wait_for_selector("text=Executive Celebration Operations", timeout=8000)
         assert page.locator("text=Executive Celebration Operations").is_visible()
 
         browser.close()

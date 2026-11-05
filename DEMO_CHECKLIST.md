@@ -112,9 +112,10 @@ Follow this 12-step sequence to deliver a flawless, high-impact demonstration sh
 ---
 
 ### Step 12: User Authentication & Multi-Event Management
-- **Action:** Click **Sign In** in the top navbar.
+- **Action:** Open `http://localhost:5173/` in a fresh browser session (or click **Sign Out** from the top navbar).
 - **What to Highlight:**
-  - Clean modal with **Sign In** and **Create Account** tabs.
-  - PBKDF2-HMAC-SHA256 password hashing and JWT token issuance.
-  - Click **Continue as Guest / Demo Organizer** to demonstrate frictionless onboarding.
+  - Public marketing **Landing Page** with hero section, feature highlights, and interactive preview.
+  - Dedicated SaaS **Sign In** (`/login`) and **Create Account** (`/register`) pages with real-time field validation.
+  - PBKDF2-HMAC-SHA256 password hashing with 100,000 iterations and RFC 7519 JWT token issuance.
+  - User-to-event isolation ensuring organizers only see their own celebration plans and sensitive expense data.
   - Navbar profile avatar shows user name and verified organizer badge with **Sign Out**.

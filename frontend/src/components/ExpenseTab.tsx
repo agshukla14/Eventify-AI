@@ -61,7 +61,7 @@ interface ExpenseTabProps {
 }
 
 const PIE_COLORS = [
-  '#0d9488', '#0284c7', '#8b5cf6', '#ec4899', '#f59e0b',
+  '#4f46e5', '#0284c7', '#8b5cf6', '#ec4899', '#f59e0b',
   '#10b981', '#6366f1', '#14b8a6', '#f97316', '#64748b',
   '#84cc16', '#06b6d4', '#d946ef', '#e11d48'
 ];
@@ -310,9 +310,9 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
       <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-teal-600" />
+            <CreditCard className="w-5 h-5 text-indigo-600" />
             <h3 className="text-base font-bold text-slate-900">Smart Expense Tracking</h3>
-            <span className="px-2.5 py-0.5 text-2xs font-bold uppercase tracking-wider bg-teal-50 text-teal-700 border border-teal-200 rounded-full">
+            <span className="px-2.5 py-0.5 text-2xs font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">
               Real-time Ledger
             </span>
           </div>
@@ -341,7 +341,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                   href={getExportExpensesCsvUrl(plan.event_id)}
                   download
                   onClick={() => setShowExportMenu(false)}
-                  className="flex items-center gap-2 px-3.5 py-2 text-xs text-slate-700 hover:bg-teal-50 hover:text-teal-900 transition-colors"
+                  className="flex items-center gap-2 px-3.5 py-2 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 transition-colors"
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                   <span>Download as CSV</span>
@@ -351,7 +351,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => setShowExportMenu(false)}
-                  className="flex items-center gap-2 px-3.5 py-2 text-xs text-slate-700 hover:bg-teal-50 hover:text-teal-900 transition-colors"
+                  className="flex items-center gap-2 px-3.5 py-2 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 transition-colors"
                 >
                   <FileText className="w-4 h-4 text-rose-600" />
                   <span>Download as PDF Report</span>
@@ -363,7 +363,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
           {/* Add Expense Button */}
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 rounded-xl shadow-sm transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 rounded-xl shadow-sm transition-all"
           >
             <Plus className="w-4 h-4" />
             <span>Add New Expense</span>
@@ -392,11 +392,11 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
 
           {/* Card 2: Total Actual Expenses */}
           <div className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs space-y-1">
-            <div className="flex items-center justify-between text-teal-600">
+            <div className="flex items-center justify-between text-indigo-600">
               <span className="text-2xs font-bold uppercase tracking-wider">Total Actual Expenses</span>
               <CreditCard className="w-4 h-4" />
             </div>
-            <p className="text-2xl font-extrabold text-teal-700">
+            <p className="text-2xl font-extrabold text-indigo-700">
               {summary.total_actual_spent.toLocaleString()} {summary.currency}
             </p>
             <span className="text-2xs text-slate-500 block">
@@ -440,7 +440,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                   ? 'text-rose-600'
                   : summary.budget_utilization_percentage >= 80
                   ? 'text-amber-600'
-                  : 'text-teal-700'
+                  : 'text-indigo-700'
               }`}>
                 {summary.budget_utilization_percentage.toFixed(1)}%
               </span>
@@ -453,7 +453,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                     ? 'bg-rose-600'
                     : summary.budget_utilization_percentage >= 80
                     ? 'bg-amber-500'
-                    : 'bg-teal-600'
+                    : 'bg-indigo-600'
                 }`}
                 style={{ width: `${Math.min(100, summary.budget_utilization_percentage)}%` }}
               />
@@ -480,7 +480,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                   ? 'bg-rose-50/90 border-rose-200 text-rose-900'
                   : alert.level === 'warning'
                   ? 'bg-amber-50/90 border-amber-200 text-amber-900'
-                  : 'bg-teal-50/90 border-teal-200 text-teal-900'
+                  : 'bg-indigo-50/90 border-indigo-200 text-indigo-900'
               }`}
             >
               {alert.level === 'danger' ? (
@@ -488,7 +488,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
               ) : alert.level === 'warning' ? (
                 <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
               ) : (
-                <CheckCircle2 className="w-4 h-4 text-teal-600 flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
               )}
               <div className="flex-1">
                 <span className="font-bold block">{alert.title}</span>
@@ -509,14 +509,14 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
           <div className="flex items-center justify-between">
             <div>
               <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <BarChart2 className="w-4 h-4 text-teal-600" />
+                <BarChart2 className="w-4 h-4 text-indigo-600" />
                 <span>Planned vs Actual Category Spending</span>
               </h4>
               <p className="text-2xs text-slate-400">Direct comparison across allocated categories</p>
             </div>
             <div className="flex items-center gap-3 text-xs font-medium">
               <span className="flex items-center gap-1 text-slate-600">
-                <span className="w-2.5 h-2.5 bg-teal-600 rounded-xs inline-block" /> Planned
+                <span className="w-2.5 h-2.5 bg-indigo-600 rounded-xs inline-block" /> Planned
               </span>
               <span className="flex items-center gap-1 text-slate-600">
                 <span className="w-2.5 h-2.5 bg-indigo-500 rounded-xs inline-block" /> Actual Spent
@@ -655,7 +655,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                             ? 'bg-rose-100 text-rose-800'
                             : c.utilization_percentage >= 85
                             ? 'bg-amber-100 text-amber-800'
-                            : 'bg-teal-50 text-teal-800'
+                            : 'bg-indigo-50 text-indigo-800'
                         }`}>
                           {c.utilization_percentage.toFixed(1)}%
                         </span>
@@ -707,7 +707,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                 placeholder="Search expense, vendor..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 w-44 sm:w-56"
+                className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 w-44 sm:w-56"
               />
             </div>
 
@@ -715,7 +715,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
             <select
               value={selectedCategory}
               onChange={e => setSelectedCategory(e.target.value)}
-              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-700"
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
             >
               <option value="all">All Categories</option>
               {categoryOptions.map((c, i) => (
@@ -729,7 +729,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
             <select
               value={selectedStatus}
               onChange={e => setSelectedStatus(e.target.value)}
-              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-700"
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
             >
               <option value="all">All Statuses</option>
               <option value="Paid">Paid</option>
@@ -740,7 +740,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as any)}
-              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 text-slate-700"
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700"
             >
               <option value="date_desc">Date: Newest First</option>
               <option value="date_asc">Date: Oldest First</option>
@@ -806,7 +806,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                         <button
                           onClick={() => handleOpenEditModal(exp)}
                           title="Edit Expense"
-                          className="p-1 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                          className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
@@ -827,7 +827,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                     <p className="text-xs font-medium">No expenses found matching current filters.</p>
                     <button
                       onClick={handleOpenAddModal}
-                      className="mt-2 text-xs font-semibold text-teal-600 hover:underline inline-flex items-center gap-1"
+                      className="mt-2 text-xs font-semibold text-indigo-600 hover:underline inline-flex items-center gap-1"
                     >
                       <Plus className="w-3.5 h-3.5" /> Log first expense
                     </button>
@@ -848,7 +848,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
 
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-teal-600" />
+                <CreditCard className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-base font-bold text-slate-900">
                   {editingExpense ? 'Edit Expense Record' : 'Add New Expense Record'}
                 </h3>
@@ -881,7 +881,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                   placeholder="e.g. Venue Advance Deposit, DJ Setup Fee"
                   value={formData.expense_name}
                   onChange={e => setFormData({ ...formData, expense_name: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                 />
               </div>
 
@@ -894,7 +894,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                   <select
                     value={formData.category}
                     onChange={e => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   >
                     {categoryOptions.map((c, i) => (
                       <option key={i} value={c}>
@@ -916,7 +916,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                     placeholder="0.00"
                     value={formData.amount === 0 ? '' : formData.amount}
                     onChange={e => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900 font-bold"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 font-bold"
                   />
                 </div>
               </div>
@@ -932,7 +932,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                     required
                     value={formData.expense_date}
                     onChange={e => setFormData({ ...formData, expense_date: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   />
                 </div>
 
@@ -970,7 +970,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                   <select
                     value={formData.payment_method || ''}
                     onChange={e => setFormData({ ...formData, payment_method: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   >
                     {PAYMENT_METHODS.map((m, i) => (
                       <option key={i} value={m}>
@@ -990,7 +990,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                     placeholder="e.g. Royal Palace Caterers"
                     value={formData.vendor_name || ''}
                     onChange={e => setFormData({ ...formData, vendor_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                   />
                   <datalist id="vendor-datalist">
                     {vendorOptions.map((v, i) => (
@@ -1010,7 +1010,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                   placeholder="Receipt number, invoice reference, contract terms, etc."
                   value={formData.notes || ''}
                   onChange={e => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 text-slate-900"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900"
                 />
               </div>
 
@@ -1026,7 +1026,7 @@ export const ExpenseTab: React.FC<ExpenseTabProps> = ({ plan, onRefreshPlan }) =
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 active:scale-95 disabled:opacity-50 rounded-xl shadow-sm transition-all"
+                  className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 rounded-xl shadow-sm transition-all"
                 >
                   <Check className="w-4 h-4" />
                   <span>{editingExpense ? 'Save Changes' : 'Record Expense'}</span>

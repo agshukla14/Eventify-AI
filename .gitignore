@@ -1,7 +1,7 @@
 # Environment and Secrets
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 *.pem
 *.key
 *.cert
@@ -22,16 +22,19 @@ ENV/
 # Node Dependencies
 frontend/node_modules/
 node_modules/
+frontend/dist/
+dist/
 
 # Python Cache & Testing
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Playwright Test Artifacts
+# Playwright Test Artifacts & Reports
 test-results/
 playwright-report/
 blob-report/

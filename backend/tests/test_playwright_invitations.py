@@ -5,6 +5,8 @@ import uvicorn
 from playwright.sync_api import sync_playwright
 from backend.app.main import app
 
+pytestmark = pytest.mark.playwright
+
 TEST_HOST = "127.0.0.1"
 TEST_PORT = 8899
 
@@ -88,8 +90,9 @@ def test_playwright_invitation_generator_e2e():
         royal_tmpl_btn = page.locator("button:has-text('Royal Wedding')").first
         royal_tmpl_btn.click()
 
-        # 8. Check that Live Card Preview reflects Royal styling / crown motif
-        assert page.locator("text=ROYAL INVITATION").first.is_visible()
+        # 8. Check that Live Card Preview reflects Royal styling / crown motif (Hindi localized)
+        page.wait_for_selector("text=शाही निमंत्रण", timeout=5000)
+        assert page.locator("text=शाही निमंत्रण").first.is_visible()
 
         # 9. Test Copy Text Button
         copy_btn = page.locator("button:has-text('Copy Invitation Text')")
